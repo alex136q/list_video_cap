@@ -97,8 +97,6 @@ void print_messages(struct queue *stk, const char *debug_label) {
 }
 
 void init_state() {
-  display.window.width = 640;
-  display.window.height = 480;
   display.window.title_string = "Framerate";
   display.window.open = 0;
   display.window.frame = NULL;
@@ -289,21 +287,20 @@ void *main_loop(void *dummy) {
 void resize_window(int msg_width, int msg_height) {
   if(display.window.width != msg_width
      || display.window.height != msg_height) {
+
+    debug_f2("[RENDER] Resize window to %dx%d\n", msg_width, msg_height);
+
     if(display.window.fixed_size) {
-      glfwSetWindowSize(display.window.glfw_id,
-			msg_width, msg_height);
       glfwSetWindowSizeLimits(display.window.glfw_id,
 			      msg_width, msg_height,
 			      msg_width, msg_height);
     }
-    else {
-      glfwSetWindowSize(display.window.glfw_id,
-			msg_width, msg_height);
-    }
+    glfwSetWindowSize(display.window.glfw_id,
+		      msg_width, msg_height);
+
     display.window.width = msg_width;
     display.window.height = msg_height;
     glViewport(0, 0, msg_width, msg_height);
-    debug_f2("[RENDER] Resize window to %dx%d\n", msg_width, msg_height);
   }
 }
 
@@ -404,10 +401,13 @@ void resize_fb() {
 			   &height);
     if(width != display.window.width
        || height != display.window.height) {
-      display.window.width = width;
-      display.window.height = height;
-      glViewport(0, 0, width, height);
       debug_f2("[RENDER] Resize fb. to %dx%d\n", width, height);
+      if(display.window.fixed_size) {
+	width = display.window.width;
+	height = display.window.height;
+	resize_window(width, height); /* neglects display scaling */
+      }
+      glViewport(0, 0, width, height);
     }
     release_lock(&display.frame.lock);
   }
