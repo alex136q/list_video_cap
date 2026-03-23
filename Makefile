@@ -1,37 +1,42 @@
 
 CCFLAGS := -g -Wall -O2 -march=native -lpthread -lglfw -lGLEW -lGL -lGLX -lX11 -lx264 -lc -lm
 
-all: list_video_cap h264_test
 
-list_video_cap:
-	$(CC) $(CCFLAGS) -o list_video_cap -DLISTVIDEOCAP_MAIN *.c
+all: build_list_video_cap build_h264_wrap
 
-h264_test:
-	$(CC) $(CCFLAGS) -o h264_test h264.c
+build_list_video_cap: build_h264_wrap
+	$(CC) $(CCFLAGS) -o list_video_cap *.c h264_wrap/h264.a
 
-run: all
-	./list_video_cap watch -d /dev/video0 -i 0 -f 60
-
-run_verbose: all
-	./list_video_cap watch -d /dev/video0 -i 0 -f 60 -v
-
-run_nofpslimit: all
-	./list_video_cap watch -d /dev/video0 -i 0 -f 0
+build_h264_wrap:
+	make -C h264_wrap
 
 clean:
 	@echo [BUILD] Deleting object files
 	rm list_video_cap
 	rm *o
+	make -C h264_wrap clean
 
-run_list:
+
+run: run_list_video_cap run_h264_wrap
+
+run_h264_wrap:
+	make -C h264_wrap run_h264_wrap
+
+run_list: list_video_cap
 	@echo [BUILD] Listing cameras
 	./list_video_cap list | tee local_video_devices.txt
 
-run_save:
+run_save: list_video_cap
 	@echo [BUILD] Grabbing one frame
 	./list_video_cap save -d /dev/video0 -i 0 -o frame_out
 
-run_watch:
+run_watch: list_video_cap
 	@echo [BUILD] Grabbing stream
 	./list_video_cap watch -d /dev/video0 -i 0 -f 120 -v
+
+run_verbose: list_video_cap
+	./list_video_cap watch -d /dev/video0 -i 0 -f 60 -v
+
+run_nofpslimit: list_video_cap
+	./list_video_cap watch -d /dev/video0 -i 0 -f 0
 

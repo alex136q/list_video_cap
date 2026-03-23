@@ -19,8 +19,6 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
-#include <x264.h>
-
 #include "sync.h"
 #include "video_msg.h"
 #include "queue.h"
@@ -30,4 +28,5 @@
 #include "cli.h"
 #include "config.h"
 
+#include "h264_wrap/h264.h"
 
