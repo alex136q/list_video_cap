@@ -285,9 +285,10 @@ void *main_loop(void *dummy) {
 }
 
 void resize_window(int msg_width, int msg_height) {
-  if(display.window.width != msg_width
-     || display.window.height != msg_height) {
+  int width, height;
+  glfwGetWindowSize(display.window.glfw_id, &width, &height);
 
+  if(width != msg_width || height != msg_height) {
     debug_f2("[RENDER] Resize window to %dx%d\n", msg_width, msg_height);
 
     if(display.window.fixed_size) {
@@ -394,21 +395,32 @@ void render_test_frame() {
 
 void resize_fb() {
   if(display.window.glfw_id) {
-    int width, height;
     acquire_lock(&display.frame.lock);
+
+    int width, height;
     glfwGetFramebufferSize(display.window.glfw_id,
 			   &width,
 			   &height);
-    if(width != display.window.width
-       || height != display.window.height) {
+
+    if(width != display.frame.width || height != display.frame.height) {
       debug_f2("[RENDER] Resize fb. to %dx%d\n", width, height);
+
       if(display.window.fixed_size) {
-	width = display.window.width;
-	height = display.window.height;
+	width = display.frame.width;
+	height = display.frame.height;
+
 	resize_window(width, height); /* neglects display scaling */
+	glViewport(0, 0, width, height);
       }
-      glViewport(0, 0, width, height);
+      else {
+	glViewport(0, 0, width, height);
+
+	glfwGetWindowSize(display.window.glfw_id, &width, &height);
+	display.window.width = width;
+	display.window.height = height;
+      }
     }
+
     release_lock(&display.frame.lock);
   }
 }
