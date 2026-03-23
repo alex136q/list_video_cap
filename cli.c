@@ -20,6 +20,7 @@ void handle_cli_cmd() {
     show_help_text();
   }
   else if(strcmp(cli.cmd, "list") == 0) {
+    debug_cfg.enable_debug_msgs = 1;    
     traverse_video_device_list();
   }
   else if(strcmp(cli.cmd, "save") == 0) {
