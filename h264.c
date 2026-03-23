@@ -9,7 +9,8 @@
 struct {
   x264_t *encoder;
   x264_param_t params;
-  x264_nal_t **nals;
+  x264_nal_t *nals;
+  int nal_count;
 } stream;
 
 unsigned char sinusoid(unsigned char bias,
@@ -21,19 +22,22 @@ unsigned char sinusoid(unsigned char bias,
 unsigned char *solid_frame(int width, int height, int *size, float t);
 
 
-#ifndef LISTVIDEOCAP_MAIN
-
 struct {
   long int time_ms;
+  unsigned char *yvec;
+  unsigned char *cbvec;
+  unsigned char *crvec;
 } config;
 
-const int frame_count = 10;
+const int frame_count = 100;
 
 const int frame_width = 800;
 const int frame_height = 600;
 
 
 long int now_ms();
+
+void dump_array(unsigned char *ptr, int size);
 
 void save_array(const unsigned char *raw_yuyv,
 		int size,
@@ -42,6 +46,13 @@ void save_array(const unsigned char *raw_yuyv,
 void export_luma_as_png(int frame_width, int frame_height,
 			const char *filename_yuyv, const char *filename_png);
 
+void extract_array(unsigned char *src,
+		   int length,
+		   int offset,
+		   int stride,
+		   unsigned char **dst);
+
+
 int main(int argc, char **argv) {
   config.time_ms = now_ms();
 
@@ -49,35 +60,103 @@ int main(int argc, char **argv) {
 
   x264_param_default(&stream.params);
 
+  stream.params.i_threads = 0;
   stream.params.i_width = frame_width;
   stream.params.i_height = frame_height;
   stream.params.i_csp = X264_CSP_YUYV;
+  stream.params.vui.i_colorprim = 2; /* application-defined */
+  stream.params.vui.i_transfer = 2; /* application-defined */
+  stream.params.vui.i_colmatrix = 2; /* application-defined */
+  stream.params.vui.i_chroma_loc = 2; /* 4:2:2 */
+  stream.params.i_log_level = X264_LOG_DEBUG;
+  stream.params.i_bitdepth = 8;
+  stream.params.i_level_idc = 9;
+  // stream.params.rc.i_aq_mode = X264_AQ_NONE;
+  stream.params.analyse.b_psnr = 1;
+  stream.params.analyse.b_ssim = 1;
 
   stream.encoder = x264_encoder_open(&stream.params);
 
   /* encode test frames */
 
   int frame_size;
+  int packed_size_sum = 0;
+
   char filename_yuyv[128];
   char filename_png[128];
 
   system("mkdir h264_test_data");
 
+  FILE *nal_out = fopen("nals.bin", "w");
+
+  x264_picture_t encoder_frame;
+  x264_picture_t encoder_output;
+
+  x264_encoder_headers(stream.encoder, &stream.nals, &stream.nal_count);
+  printf("H.264 headers: %d NALs\n", stream.nal_count);
+  for(int k = 0; k < stream.nal_count; ++k) {
+    printf("H.264 headers: NAL %d: size %d\n", k, stream.nals[k].i_payload);
+    dump_array(stream.nals[k].p_payload, stream.nals[k].i_payload);
+    packed_size_sum += stream.nals[k].i_payload;
+    fwrite(stream.nals[k].p_payload, stream.nals[k].i_payload, 1, nal_out);
+  }
+
   for(int frame = 1; frame <= frame_count; ++frame) {
+    x264_picture_alloc(&encoder_frame,  X264_CSP_YUYV, frame_width, frame_height);
+    x264_picture_alloc(&encoder_output, X264_CSP_YUYV, frame_width, frame_height);
+
     unsigned char *raw_yuyv =
       solid_frame(frame_width, frame_height, &frame_size,
 		  (60.0f * (float)frame / frame_count));
+
+    extract_array(raw_yuyv, frame_size, 0, 2, &config.yvec);
+    extract_array(raw_yuyv, frame_size, 1, 4, &config.cbvec);
+    extract_array(raw_yuyv, frame_size, 3, 4, &config.crvec);
+
+    encoder_frame.img.i_csp = X264_CSP_YUYV;
+    encoder_frame.img.i_plane = 3;
+    encoder_frame.img.i_stride[0] = frame_width;
+    encoder_frame.img.i_stride[1] = frame_width >> 1;
+    encoder_frame.img.i_stride[2] = frame_width >> 1;
+    encoder_frame.img.plane[0] = config.yvec;
+    encoder_frame.img.plane[1] = config.cbvec;
+    encoder_frame.img.plane[2] = config.crvec;
+    encoder_frame.i_pts = frame;
+
+    stream.nals = NULL;
+    stream.nal_count = 0;
+    x264_encoder_encode(stream.encoder, &stream.nals, &stream.nal_count, &encoder_frame, &encoder_output);
+
+    printf("Frame %d: %d NALs\n", frame, stream.nal_count);
+    int nals_size = 0;
+    for(int k = 0; k < stream.nal_count; ++k) {
+      int size = stream.nals[k].i_payload;
+      nals_size += size;
+      fwrite(stream.nals[k].p_payload, stream.nals[k].i_payload, 1, nal_out);
+      printf("\tNAL %d size %d bytes\n", k, size);
+    }
+
+    printf("Frame %d/%d: size %d bytes, streamed size %d bytes\n",
+	   frame, frame_count, frame_size, nals_size);
+    packed_size_sum += nals_size;
 
     sprintf(filename_yuyv, "h264_test_data/%04d.bin", frame);
     sprintf(filename_png,  "h264_test_data/%04d.png", frame);
     save_array(raw_yuyv, frame_size, filename_yuyv);
     export_luma_as_png(frame_width, frame_height, filename_yuyv, filename_png);
-    free(raw_yuyv);
+
+    free(raw_yuyv); /* freed by x264_picture_clean */
   }
+
+  fclose(nal_out);
+
+  printf("End of stream\n");
+  printf("Generated frames: %d totalling %d bytes\n", frame_count, frame_count * frame_size);
+  printf("Encoded   frames: %d totalling %d bytes\n", frame_count, packed_size_sum);
+  printf("Compression ratio: %.3f%%\n", (float)(100.0 * packed_size_sum) / (frame_count * frame_size));
 
   x264_encoder_close(stream.encoder);
 
-  /* decode test frames */
   return 0;
 }
 
@@ -85,9 +164,6 @@ long int now_ms() {
   /* measures process time, which can skew harshly */
   return (1000.0d / CLOCKS_PER_SEC) * clock();
 }
-
-#endif
-
 
 unsigned char *solid_frame(int width, int height, int *size, float t) {
   *size = width * height * 2;
@@ -137,4 +213,28 @@ void save_array(const unsigned char *raw_yuyv,
   fwrite(raw_yuyv, 2, (size >> 1), fd);
   fclose(fd);
 }
+
+void dump_array(unsigned char *ptr, int size) {
+  static const int bytes_per_line = 0x20;
+  for(int ptr0 = 0; ptr0 < size; ptr0 += bytes_per_line) {
+    int ptr1;
+    printf("\t+%04X ", ptr0);
+    for(ptr1 = 0; ptr1 < bytes_per_line && (ptr0 + ptr1 < size); ++ptr1) {
+      printf("%02X", ptr[ptr0 + ptr1]);
+    }
+    printf("\n");
+  }
+}
+
+void extract_array(unsigned char *src,
+		   int length,
+		   int offset,
+		   int stride,
+		   unsigned char **dst){
+  *dst = malloc(length / stride);
+  for(int ptr = offset, out_ptr = 0; ptr < length; ptr += stride, ++out_ptr) {
+    (*dst)[out_ptr] = src[ptr];
+  }
+}
+
 
