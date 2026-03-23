@@ -269,7 +269,13 @@ void *main_loop(void *dummy) {
       render_frame();
     }
     else {
+      debug_f0("[RENDER] solid color frame\n");
       render_test_frame();
+    }
+
+    glfwPollEvents();
+    if(glfwWindowShouldClose(display.window.glfw_id)) {
+      display.window.open = 0;
     }
 
     ++display.stat.frames_rendered; update_frame_stats();
@@ -385,12 +391,6 @@ void render_test_frame() {
   glClear(GL_COLOR_BUFFER_BIT);
   glFinish();
   glfwSwapBuffers(display.window.glfw_id);
-  glfwPollEvents();
-
-  ++display.stat.frames_rendered; update_frame_stats();
-  if(display.other.frame_delay_ms > 0) {
-    sleep_ms(display.other.frame_delay_ms);
-  }
 }
 
 void resize_fb() {
@@ -531,11 +531,6 @@ void render_frame() {
 
   display.frame.size = 0;
   release_lock(&display.frame.lock);
-
-  glfwPollEvents();
-  if(glfwWindowShouldClose(display.window.glfw_id)) {
-    display.window.open = 0;
-  }
 }
 
 void blit_rgba_image(unsigned char *ptr) {

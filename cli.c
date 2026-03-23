@@ -68,7 +68,7 @@ void show_help_text() {
   debug_f0("\n-v\n");
   debug_f0("\tEnable debug messages.\n");
   debug_f0("\n-s <width> <height>\n");
-  debug_f0("\tVideo capture frame size hints for the V4L2 driver.\n");
+  debug_f0("\tVideo capture frame and window size hints for the V4L2 driver.\n");
   debug_f0("\n-R\n");
   debug_f0("\tAllow window to be resized by the user.\n");
   debug_f0("\n-b\n");
@@ -81,9 +81,9 @@ void show_help_text() {
   debug_f0("\tOverlay solid color patterns over the captured frame (can be combined):\n");
   debug_f0("\t\t-F full\t\tFill whole frame.\n");
   debug_f0("\t\t-F half\t\tFill lower half of frame.\n");
-  debug_f0("\t\t-F pixel\t\tColor top left pixel.\n");
+  debug_f0("\t\t-F pixel\tColor top left pixel.\n");
   debug_f0("\t\t-F diag\t\tFill main diagonal.\n");
-  debug_f0("\t\t-F horiz\t\tFill two lines.\n");
+  debug_f0("\t\t-F horiz\tFill two lines.\n");
 }
 
 void populate_cli_arguments(int argc, char **argv) {
@@ -112,8 +112,8 @@ void populate_cli_arguments(int argc, char **argv) {
   display.window.fixed_size = 1;
   display.window.enable_border = 0;
 
-  display.capture.req_width = 4096;
-  display.capture.req_height = 4096;
+  display.window.width = display.capture.req_width = 800;
+  display.window.height = display.capture.req_height = 600;
 
   for(int arg = 2; arg < argc; ++arg) {
     if(strcmp(argv[arg], "-d") == 0) {
