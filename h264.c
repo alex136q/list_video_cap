@@ -61,6 +61,8 @@ int main(int argc, char **argv) {
   char filename_yuyv[128];
   char filename_png[128];
 
+  system("mkdir h264_test_data");
+
   for(int frame = 1; frame <= frame_count; ++frame) {
     unsigned char *raw_yuyv =
       solid_frame(frame_width, frame_height, &frame_size,
