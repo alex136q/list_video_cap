@@ -5,12 +5,16 @@
 
 struct display_config {
   struct {
+    int req_width;
+    int req_height;
+  } capture;
+  struct {
     int width;
-    int max_width;
     int pitch;
     int height;
-    int max_height;
     const char *title_string;
+    int fixed_size;
+    int enable_border;
     int open;
     GLFWwindow *glfw_id;
     unsigned char *frame;

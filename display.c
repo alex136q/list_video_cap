@@ -238,23 +238,24 @@ void *main_loop(void *dummy) {
   glewExperimental = 1;
 
   glfwInit();
+
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+  glfwWindowHint(GLFW_FLOATING, GLFW_TRUE);
+  glfwWindowHint(GLFW_RESIZABLE, (display.window.fixed_size ? GLFW_FALSE : GLFW_TRUE));
+  glfwWindowHint(GLFW_DECORATED, GLFW_TRUE);
 
-  do {
-    display.window.glfw_id =
-      glfwCreateWindow(display.window.width,
-		       display.window.height,
-		       display.window.title_string,
-		       NULL, NULL);
-  } while(!display.window.glfw_id);
+  display.window.glfw_id =
+    glfwCreateWindow(display.window.width,
+		     display.window.height,
+		     display.window.title_string,
+		     NULL, NULL);
 
   display.window.open = 1;
 
   glfwMakeContextCurrent(display.window.glfw_id);
 
-  glewExperimental = 1;
   glewInit();
 
   debug_f1("[RENDER] [MAIN] Created window: %016X\n",
@@ -288,8 +289,17 @@ void *main_loop(void *dummy) {
 void resize_window(int msg_width, int msg_height) {
   if(display.window.width != msg_width
      || display.window.height != msg_height) {
-    glfwSetWindowSize(display.window.glfw_id,
-		      msg_width, msg_height);
+    if(display.window.fixed_size) {
+      glfwSetWindowSize(display.window.glfw_id,
+			msg_width, msg_height);
+      glfwSetWindowSizeLimits(display.window.glfw_id,
+			      msg_width, msg_height,
+			      msg_width, msg_height);
+    }
+    else {
+      glfwSetWindowSize(display.window.glfw_id,
+			msg_width, msg_height);
+    }
     display.window.width = msg_width;
     display.window.height = msg_height;
     glViewport(0, 0, msg_width, msg_height);
@@ -634,14 +644,16 @@ void blit_rgba_image(unsigned char *ptr) {
   /* two triangles */
   const float tex_w = (float)display.frame.width  / display.frame.tex_width;
   const float tex_h = (float)display.frame.height / display.frame.tex_height;
+
+  const float edge = (display.window.enable_border ? 0.8f : 1.0f);
   
   const float square[] = {
-    -0.8f, +0.8f, 0.0f, +1.0f,  0.0f,  0.0f, 0.0f, 0.0f, +1.0f, +1.0f, +1.0f, +1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-    +0.8f, +0.8f, 0.0f, +1.0f, tex_w,  0.0f, 0.0f, 0.0f, +1.0f, +1.0f, +1.0f, +1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-    +0.8f, -0.8f, 0.0f, +1.0f, tex_w, tex_h, 0.0f, 0.0f, +1.0f, +1.0f, +1.0f, +1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-    +0.8f, -0.8f, 0.0f, +1.0f, tex_w, tex_h, 0.0f, 0.0f, +1.0f, +1.0f, +1.0f, +1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-    -0.8f, -0.8f, 0.0f, +1.0f,  0.0f, tex_h, 0.0f, 0.0f, +1.0f, +1.0f, +1.0f, +1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-    -0.8f, +0.8f, 0.0f, +1.0f,  0.0f,  0.0f, 0.0f, 0.0f, +1.0f, +1.0f, +1.0f, +1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+    -edge, +edge, 0.0f, +1.0f,  0.0f,  0.0f, 0.0f, 0.0f, +1.0f, +1.0f, +1.0f, +1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+    +edge, +edge, 0.0f, +1.0f, tex_w,  0.0f, 0.0f, 0.0f, +1.0f, +1.0f, +1.0f, +1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+    +edge, -edge, 0.0f, +1.0f, tex_w, tex_h, 0.0f, 0.0f, +1.0f, +1.0f, +1.0f, +1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+    +edge, -edge, 0.0f, +1.0f, tex_w, tex_h, 0.0f, 0.0f, +1.0f, +1.0f, +1.0f, +1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+    -edge, -edge, 0.0f, +1.0f,  0.0f, tex_h, 0.0f, 0.0f, +1.0f, +1.0f, +1.0f, +1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
+    -edge, +edge, 0.0f, +1.0f,  0.0f,  0.0f, 0.0f, 0.0f, +1.0f, +1.0f, +1.0f, +1.0f, 0.0f, 0.0f, 0.0f, 0.0f,
   };
   static const int point_count = 6;
 

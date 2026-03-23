@@ -210,8 +210,8 @@ void save_frame() {
    */
 
   /* These will be adjusted by the video subsystem. */
-  fmt_s.fmt.pix.width = 4096;
-  fmt_s.fmt.pix.height = 4096;
+  fmt_s.fmt.pix.width = display.capture.req_width;
+  fmt_s.fmt.pix.height = display.capture.req_width;
 
   struct v4l2_requestbuffers req_bufs_s;
 
@@ -417,8 +417,8 @@ void stream_frames() {
   struct v4l2_format fmt_s;
   fmt_s.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
   fmt_s.fmt.pix.pixelformat = V4L2_PIX_FMT_YUYV;
-  fmt_s.fmt.pix.width = 4096;
-  fmt_s.fmt.pix.height = 4096;
+  fmt_s.fmt.pix.width = display.capture.req_width;
+  fmt_s.fmt.pix.height = display.capture.req_width;
 
   struct v4l2_requestbuffers req_bufs_s;
   req_bufs_s.count = 1;

@@ -67,6 +67,12 @@ void show_help_text() {
   debug_f0("\tLimit rendering frame rate to <FPS>.\n");
   debug_f0("\n-v\n");
   debug_f0("\tEnable debug messages.\n");
+  debug_f0("\n-s <width> <height>\n");
+  debug_f0("\tVideo capture frame size hints for the V4L2 driver.\n");
+  debug_f0("\n-R\n");
+  debug_f0("\tAllow window to be resized by the user.\n");
+  debug_f0("\n-b\n");
+  debug_f0("\tShow a border around the video feed.\n");
   debug_f0("\n-m\n");
   debug_f0("\tShow memory dumps in debug messages.\n");
   debug_f0("\n-t\n");
@@ -102,6 +108,12 @@ void populate_cli_arguments(int argc, char **argv) {
   display.test.fill_pixel = 0;
   display.test.fill_diag = 0;
   display.test.fill_horiz = 0;
+
+  display.window.fixed_size = 1;
+  display.window.enable_border = 0;
+
+  display.capture.req_width = 4096;
+  display.capture.req_height = 4096;
 
   for(int arg = 2; arg < argc; ++arg) {
     if(strcmp(argv[arg], "-d") == 0) {
@@ -147,6 +159,16 @@ void populate_cli_arguments(int argc, char **argv) {
 	show_cli_error_text(arg);
 	exit(1);
       }
+    }
+    else if(strcmp(argv[arg], "-R") == 0) {
+      display.window.fixed_size = 0;
+    }
+    else if(strcmp(argv[arg], "-b") == 0) {
+      display.window.enable_border = 1;
+    }
+    else if(strcmp(argv[arg], "-s") == 0 && argc > arg + 1) {
+      display.window.width = display.capture.req_width = atoi(argv[++arg]);
+      display.window.height = display.capture.req_height = atoi(argv[++arg]);
     }
     else {
       show_cli_error_text(arg);
