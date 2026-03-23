@@ -15,3 +15,8 @@ This application requires a Linux distribution and the presence of the following
 - `libX11.so`, `libxcb.so`, `libXau.so`, `libXdmcp.so` (part of X11)
 - `libc.so`, `libm.so` (ubiquitous)
 
+CLI interface
+-------------
+
+Run `./list_video_cap help` for a summary of the supported commands and their arguments.
+
