@@ -80,5 +80,5 @@ Other files
 
 `extract_yuyv_y.py <PATH>` when run will write the bytes in even positions (Y' values) from `<PATH>` into `<PATH>.luma`. These are to be interpreted as a grayscale bitmap which can further be processed; `h264_test` passes `<PATH>.luma` files through `magick` (ImageMagick) to convert them to PNG files in the `h264_test_data/` folder.
 
-`h264_test` is meant to try out `libx264`; it generates sample YUV 4:2:2 bitmaps and uses `libx264` to build a H.264 stream of frames from them.
+`h264_test` is meant to try out `libx264`; it generates sample YUV 4:2:2 bitmaps and uses `libx264` to build a H.264 stream of frames from them. The `nals.bin` output it generates on encoding the test frames is a raw H.264 data stream that can be played with applications like `mpv`.
 
