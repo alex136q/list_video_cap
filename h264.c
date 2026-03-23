@@ -23,7 +23,6 @@ unsigned char *solid_frame(int width, int height, int *size, float t);
 
 
 struct {
-  long int time_ms;
   unsigned char *yvec;
   unsigned char *cbvec;
   unsigned char *crvec;
@@ -32,9 +31,6 @@ struct {
   int frame_width;
   int frame_height;
 } config;
-
-
-long int now_ms();
 
 void dump_array(unsigned char *ptr, int size);
 
@@ -58,8 +54,6 @@ void display_h264_cli_help();
 int main(int argc, char **argv) {
   parse_h264_cli_args(argc, argv);
 
-  config.time_ms = now_ms();
-
   /* initialize libx264 encoder and its parameters */
 
   x264_param_default(&stream.params);
@@ -72,7 +66,7 @@ int main(int argc, char **argv) {
   stream.params.vui.i_transfer = 2; /* application-defined */
   stream.params.vui.i_colmatrix = 2; /* application-defined */
   stream.params.vui.i_chroma_loc = 2; /* 4:2:2 */
-  stream.params.i_log_level = X264_LOG_DEBUG;
+  stream.params.i_log_level = X264_LOG_INFO /* or X264_LOG_DEBUG */;
   stream.params.i_bitdepth = 8;
   stream.params.i_level_idc = 9;
   // stream.params.rc.i_aq_mode = X264_AQ_NONE;
@@ -84,7 +78,7 @@ int main(int argc, char **argv) {
   /* encode test frames */
 
   int frame_size;
-  int packed_size_sum = 0;
+  long packed_size_sum = 0;
 
   char filename_yuyv[128];
   char filename_png[128];
@@ -132,7 +126,7 @@ int main(int argc, char **argv) {
     x264_encoder_encode(stream.encoder, &stream.nals, &stream.nal_count, &encoder_frame, &encoder_output);
 
     printf("Frame %d: %d NALs\n", frame, stream.nal_count);
-    int nals_size = 0;
+    long nals_size = 0;
     for(int k = 0; k < stream.nal_count; ++k) {
       int size = stream.nals[k].i_payload;
       nals_size += size;
@@ -140,7 +134,7 @@ int main(int argc, char **argv) {
       printf("\tNAL %d size %d bytes\n", k, size);
     }
 
-    printf("Frame %d/%d: size %d bytes, streamed size %d bytes\n",
+    printf("Frame %d/%d: size %d bytes, streamed size %ld bytes\n",
 	   frame, config.frame_count, frame_size, nals_size);
     packed_size_sum += nals_size;
 
@@ -157,18 +151,13 @@ int main(int argc, char **argv) {
   fclose(nal_out);
 
   printf("End of stream\n");
-  printf("Generated frames: %d totalling %d bytes\n", config.frame_count, config.frame_count * frame_size);
-  printf("Encoded   frames: %d totalling %d bytes\n", config.frame_count, packed_size_sum);
-  printf("Compression ratio: %.3f%%\n", (float)(100.0 * packed_size_sum) / (config.frame_count * frame_size));
+  printf("Generated frames: %d totalling %ld bytes\n", config.frame_count, (long)config.frame_count * (long)frame_size);
+  printf("Encoded   frames: %d totalling %ld bytes\n", config.frame_count, packed_size_sum);
+  printf("Compression ratio: %.3f%%\n", (float)(100.0 * packed_size_sum) / ((long)config.frame_count * (long)frame_size));
 
   x264_encoder_close(stream.encoder);
 
   return 0;
-}
-
-long int now_ms() {
-  /* measures process time, which can skew harshly */
-  return (1000.0d / CLOCKS_PER_SEC) * clock();
 }
 
 unsigned char *solid_frame(int width, int height, int *size, float t) {
