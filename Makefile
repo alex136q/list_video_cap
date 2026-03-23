@@ -1,11 +1,13 @@
 
-CCFLAGS := -Wall -O2 -march=native -lpthread -lglfw -lGLEW -lGL -lGLX -lX11 -lx264 -lc -lm
+CCFLAGS := -g -Wall -O2 -march=native -lpthread -lglfw -lGLEW -lGL -lGLX -lX11 -lx264 -lc -lm
 
-x264_test:
+all: list_video_cap h264_test
+
+list_video_cap:
+	$(CC) $(CCFLAGS) -o list_video_cap -DLISTVIDEOCAP_MAIN *.c
+
+h264_test:
 	$(CC) $(CCFLAGS) -o h264_test h264.c
-
-all:
-	$(CC) $(CCFLAGS) -o list_video_cap *.c
 
 run: all
 	./list_video_cap watch -d /dev/video0 -i 0 -f 60
