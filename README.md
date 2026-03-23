@@ -74,3 +74,9 @@ Run `./list_video_cap help` for a summary of the supported commands and their ar
 		    -F pixel	Color top left pixel.
 		    -F diag		Fill main diagonal.
 		    -F horiz	Fill two lines.
+
+Other files
+-----------
+
+`extract_yuyv_y.py <PATH>` when run will write the bytes in even positions (Y' values) from `<PATH>` into `<PATH>.luma`. These are to be interpreted as a grayscale bitmap which can further be processed; `h264_test` passes `<PATH>.luma` files through `magick` (ImageMagick) to convert them to PNG files in the `h264_test_data/` folder.
+
