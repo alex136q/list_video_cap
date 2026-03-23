@@ -175,9 +175,9 @@ unsigned char *solid_frame(int width, int height, int *size, float t) {
   *size = width * height * 2;
   unsigned char *data = malloc(*size);
 
-  const unsigned char Y_ = sinusoid(0x7F, 0x7F, t, 30.0f, 0.000f);
-  const unsigned char Cb = sinusoid(0x7F, 0x7F, t, 20.0f, 0.500f);
-  const unsigned char Cr = sinusoid(0x7F, 0x7F, t, 10.0f, 0.125f);
+  const unsigned char Y_ = sinusoid(0x7F, 0x7F, t, 16.0f, 0.000f);
+  const unsigned char Cb = sinusoid(0x7F, 0x7F, t, 12.0f, 0.369f);
+  const unsigned char Cr = sinusoid(0x7F, 0x7F, t,  7.0f, 0.417f);
 
   for(int ptr = 0; ptr < *size; ptr += 4) {
     data[ptr + 0] = Y_;
