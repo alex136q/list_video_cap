@@ -11,7 +11,7 @@ Run `make` in the folder containing the sources.
 This application requires a Linux distribution and the presence of the following dynamic libraries:
 
 - `libx264.so` (package `x264`; for H.264 encoding)
-- `libavcodec.so` (package `ffmpeg`; for H.264 decoding)
+- `libavcodec.so`, `libavutil.so` (package `ffmpeg`; for H.264 decoding)
 - `libglfw.so` (packaged under `glfw` or `glfw-x11` or `glfw-wayland`)
 - `libGL.so`, `libGLdispatch.so`, `libGLX.so` (`libglvnd`, ships with X11)
 - `libX11.so`, `libxcb.so`, `libXau.so`, `libXdmcp.so` (part of X11)
@@ -22,8 +22,9 @@ CLI interface
 
 Run `./list_video_cap help` for a summary of the supported commands and their arguments. At present the help text is as follows:
 
-    Usage:
+    Usage: ./list_video_cap <COMMAND> <ARG>...
 
+    Commands:
 
     ./list_video_cap help
 	    Shows this text.
@@ -46,7 +47,7 @@ Run `./list_video_cap help` for a summary of the supported commands and their ar
     ./list_video_cap watch -d <path> -i <integer>
 	    Opens a window displaying the camera feed.
 
-    Other options:
+    Flags:
 
     -f <FPS>
 	    Limit rendering frame rate to <FPS>.

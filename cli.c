@@ -49,7 +49,7 @@ void handle_cli_cmd() {
 
 void show_help_text() {
   debug_f0("Usage: ./list_video_cap <COMMAND> <ARG>...\n\n"
-	   "Commands:\n\n"
+	   "Commands:\n"
 	   "\n./list_video_cap help\n\tShows this text.\n"
 	   "\n./list_video_cap list\n\tLists the capabilities of available video devices.\n"
 	   "\n./list_video_cap list -d <path>\n\tLists the capabilities of the specified device.\n"
@@ -58,7 +58,7 @@ void show_help_text() {
 	   "\n./list_video_cap save -d <path> -i <integer> -o <path>\n\tSave a single frame as grayscale (Y' component).\n"
 	   "\n./list_video_cap watch -d <path> -i <integer>\n\tOpens a window displaying the camera feed.\n"
 	   "\n"
-	   "Flags:\n\n"
+	   "Flags:\n"
 	   "\n-f <FPS>\n\tLimit rendering frame rate to <FPS>.\n"
 	   "\n-v\n\tEnable debug messages.\n"
 	   "\n-s <width> <height>\n\tVideo capture frame and window size hints for the V4L2 driver.\n"
