@@ -48,43 +48,30 @@ void handle_cli_cmd() {
 }
 
 void show_help_text() {
-  debug_f0("Usage:\n");
-  debug_s1("\n%s help\n", cli.argv[0]);
-  debug_f0("\tShows this text.\n");
-  debug_s1("\n%s list\n", cli.argv[0]);
-  debug_f0("\tLists the capabilities of available video devices.\n");
-  debug_s1("\n%s list -d <path>\n", cli.argv[0]);
-  debug_f0("\tLists the capabilities of the specified device.\n");
-  debug_s1("\n%s list -i <integer>\n", cli.argv[0]);
-  debug_f0("\tLists the capabilities of the given capture input for all devices.\n");
-  debug_s1("\n%s list -d <path> -i <integer>\n", cli.argv[0]);
-  debug_f0("\tLists only the capabilities of the given input and device.\n");
-  debug_s1("\n%s save -d <path> -i <integer> -o <path>\n", cli.argv[0]);
-  debug_f0("\tSave a single frame as grayscale (Y' component).\n");
-  debug_s1("\n%s watch -d <path> -i <integer>\n", cli.argv[0]);
-  debug_f0("\tOpens a window displaying the camera feed.\n");
-  debug_f0("\nOther options:\n");
-  debug_f0("\n-f <FPS>\n");
-  debug_f0("\tLimit rendering frame rate to <FPS>.\n");
-  debug_f0("\n-v\n");
-  debug_f0("\tEnable debug messages.\n");
-  debug_f0("\n-s <width> <height>\n");
-  debug_f0("\tVideo capture frame and window size hints for the V4L2 driver.\n");
-  debug_f0("\n-R\n");
-  debug_f0("\tAllow window to be resized by the user.\n");
-  debug_f0("\n-b\n");
-  debug_f0("\tShow a border around the video feed.\n");
-  debug_f0("\n-m\n");
-  debug_f0("\tShow memory dumps in debug messages.\n");
-  debug_f0("\n-t\n");
-  debug_f0("\tTest OpenGL by rendering dummy frames.\n");
-  debug_f0("\n-F <type>\n");
-  debug_f0("\tOverlay solid color patterns over the captured frame (can be combined):\n");
-  debug_f0("\t\t-F full\t\tFill whole frame.\n");
-  debug_f0("\t\t-F half\t\tFill lower half of frame.\n");
-  debug_f0("\t\t-F pixel\tColor top left pixel.\n");
-  debug_f0("\t\t-F diag\t\tFill main diagonal.\n");
-  debug_f0("\t\t-F horiz\tFill two lines.\n");
+  debug_f0("Usage: ./list_video_cap <COMMAND> <ARG>...\n\n"
+	   "Commands:\n\n"
+	   "\n./list_video_cap help\n\tShows this text.\n"
+	   "\n./list_video_cap list\n\tLists the capabilities of available video devices.\n"
+	   "\n./list_video_cap list -d <path>\n\tLists the capabilities of the specified device.\n"
+	   "\n./list_video_cap list -i <integer>\n\tLists the capabilities of the given capture input for all devices.\n"
+	   "\n./list_video_cap list -d <path> -i <integer>\n\tLists only the capabilities of the given input and device.\n"
+	   "\n./list_video_cap save -d <path> -i <integer> -o <path>\n\tSave a single frame as grayscale (Y' component).\n"
+	   "\n./list_video_cap watch -d <path> -i <integer>\n\tOpens a window displaying the camera feed.\n"
+	   "\n"
+	   "Flags:\n\n"
+	   "\n-f <FPS>\n\tLimit rendering frame rate to <FPS>.\n"
+	   "\n-v\n\tEnable debug messages.\n"
+	   "\n-s <width> <height>\n\tVideo capture frame and window size hints for the V4L2 driver.\n"
+	   "\n-R\n\tAllow window to be resized by the user.\n"
+	   "\n-b\n\tShow a border around the video feed.\n"
+	   "\n-m\n\tShow memory dumps in debug messages.\n"
+	   "\n-t\n\tTest OpenGL by rendering dummy frames.\n"
+	   "\n-F <type>\n\tOverlay solid color patterns over the captured frame (can be combined):\n"
+	   "\t\t-F full\t\tFill whole frame.\n"
+	   "\t\t-F half\t\tFill lower half of frame.\n"
+	   "\t\t-F pixel\tColor top left pixel.\n"
+	   "\t\t-F diag\t\tFill main diagonal.\n"
+	   "\t\t-F horiz\tFill two lines.\n");
 }
 
 void populate_cli_arguments(int argc, char **argv) {
