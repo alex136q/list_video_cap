@@ -27,8 +27,8 @@ void video_ctl(struct video_msg cmd) {
     init_state();
     init_display();
     h264_init_decoder(&h264_decoder);
-    h264_encoder.debug_info = h264_encoder.debug_info;
-    h264_encoder.dump_bytes = h264_encoder.dump_bytes;
+    h264_decoder.debug_info = h264_encoder.debug_info;
+    h264_decoder.dump_bytes = h264_encoder.dump_bytes;
   }
   else if(cmd.oper == VIDEO_CMD_SET_ARGC) {
     /* required by GLUT in the previous iteration */
@@ -54,14 +54,19 @@ void video_ctl(struct video_msg cmd) {
   else if(cmd.oper == VIDEO_CMD_FRAME) {
     debug_f0("[VIDEO] Cloning "); dump_msg_header(&cmd);
 
-
     if(cmd.size != 0 && cmd.dptr != NULL) {
       if(display.h264_param.use_h264) {
 	h264_decode_frame(&h264_decoder, cmd.dptr, cmd.size);
 
-	const int frame_count = h264_decoder.h264_data.output_frames;
+	if(cli.frame_capture_path != NULL && h264_decoder.dump_bytes) {
+	  FILE *h264_dump_fd = fopen(cli.frame_capture_path, "a");
+	  fwrite(cmd.dptr, 1, cmd.size, h264_dump_fd);
+	  fclose(h264_dump_fd);
+	}
 
 	long int total_size = 0;
+
+	const int frame_count = h264_decoder.h264_data.output_frames;
 
 	for(int frame = 0; frame < frame_count; ++frame) {
 	  struct video_msg msg_copy;
@@ -84,8 +89,8 @@ void video_ctl(struct video_msg cmd) {
 	}
 
 	debug_f3("[VIDEO] Decoded packet:"
-		 " packed size %d"
-		 " frame count %d"
+		 " packed size %d,"
+		 " frame count %d,"
 		 " frame sizes %ld bytes"
 		 "\n",
 		 cmd.size,
