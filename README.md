@@ -42,11 +42,23 @@ Run `./list_video_cap help` for a summary of the supported commands and their ar
 
     Flags:
 
+    -c
+	    Fallback to raw frame data channel. The absence of this flag causes the application to stream H.264-encoded packets.
+
+    -k <SIZE>
+	    Size of the H.264 packets to be streamed to the graphics thread.
+
     -f <FPS>
 	    Limit rendering frame rate to <FPS>.
 
+    -j
+	    Use planar YUV 4:2:2 encoding. Default encoding is packed YUV 4:2:2.
+
     -v
 	    Enable debug messages.
+
+    -b
+	    Enable H.264 packet byte dumps (implies -v).
 
     -s <width> <height>
 	    Video capture frame and window size hints for the V4L2 driver.
