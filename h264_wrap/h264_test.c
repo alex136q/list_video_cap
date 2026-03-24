@@ -276,7 +276,7 @@ int main(int argc, char **argv) {
   }
 
   if(h264_cli_config.test_decoding) {
-    h264_init_decoder(&codec, 0, 0);
+    h264_init_decoder(&codec);
     parse_h264_cli_args(argc, argv, &codec);
     decode_test_frames(&codec);
     h264_free_decoder(&codec);

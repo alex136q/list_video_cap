@@ -3,7 +3,7 @@
 extern struct cli_args cli;
 
 struct display_config display;
-
+struct h264_config h264_decoder;
 
 void video_ctl(struct video_msg cmd) {
   debug_f0("[VIDEO] [video_ctl] "); dump_msg_header(&cmd);
@@ -24,6 +24,7 @@ void video_ctl(struct video_msg cmd) {
     debug_f0("[VIDEO] opening window\n");
     init_state();
     init_display();
+    h264_init_decoder(&h264_decoder);
   }
   else if(cmd.oper == VIDEO_CMD_SET_ARGC) {
     /* required by GLUT in the previous iteration */
@@ -46,25 +47,38 @@ void video_ctl(struct video_msg cmd) {
   else if(cmd.oper == VIDEO_CMD_SET_PITCH) {
     display.frame.pitch = cmd.size;
   }
-  else {
+  else if(cmd.oper == VIDEO_CMD_FRAME) {
     debug_f0("[VIDEO] cloning "); dump_msg_header(&cmd);
+
     struct video_msg msg_copy;
     msg_copy.oper = cmd.oper;
-    msg_copy.size = cmd.size;
+
     if(cmd.size != 0 && cmd.dptr != NULL) {
-      msg_copy.dptr = malloc(cmd.size);
-      memcpy(msg_copy.dptr, cmd.dptr, cmd.size);
+      if(display.h264_param.use_h264) {
+	h264_decode_frame(&h264_decoder, cmd.dptr, cmd.size);
+      }
+      else {
+	msg_copy.size = cmd.size;
+	msg_copy.dptr = malloc(cmd.size);
+	memcpy(msg_copy.dptr, cmd.dptr, cmd.size);
+      }
     }
     else {
       msg_copy.dptr = NULL;
     }
+
     debug_f0("[VIDEO] cloned as "); dump_msg_header(&msg_copy);
     debug_f2("[VIDEO] message queued (%d/%d)\n",
 	     queue_length(&display.queue_r),
 	     display.queue_r.max_length);
+
     queue_push(&display.queue_r, &msg_copy);
+
     print_messages(&display.queue_r, "R");
     print_messages(&display.queue_w, "W");
+  }
+  else {
+    debug_f1("[VIDEO] Unknown message type: %d; skipping\n", cmd.oper);
   }
 }
 
@@ -157,7 +171,7 @@ void set_image(const struct video_msg *msg) {
     return;
   }
 
-  debug_f1("[FRAME] frame: size %d, ", msg->size);
+  debug_f1("[FRAME] frame: size %d", msg->size);
   dump_msg_header(msg);
 
   acquire_lock(&display.frame.lock);

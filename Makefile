@@ -1,5 +1,5 @@
 
-CCFLAGS := -g -Wall -O2 -march=native -lpthread -lglfw -lGLEW -lGL -lGLX -lX11 -lx264 -lc -lm
+CCFLAGS := -g -Wall -O2 -march=native -lpthread -lglfw -lGLEW -lGL -lGLX -lX11 -lx264 -lavcodec -lavutil -lc -lm
 
 
 all: build_list_video_cap build_h264_wrap

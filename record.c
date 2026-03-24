@@ -3,6 +3,9 @@
 extern struct cli_args cli;
 extern struct display_config display;
 
+struct h264_config h264_encoder;
+
+
 void traverse_video_device_list() {
   if(cli.video_dev_path != NULL) {
     probe_capab(cli.video_dev_path);
@@ -535,8 +538,42 @@ void stream_frames() {
 
 void send_frame(unsigned char *ptr, const int length)
 {
-  struct video_msg msg;
-  msg.oper = VIDEO_CMD_FRAME;      msg.size = length;
-  msg.dptr = ptr;  video_ctl(msg);
+  if(display.h264_param.use_h264) {
+    h264_encode_frame(&h264_encoder, ptr);
+    h264_encoder.h264_data.stream = NULL;
+    send_stream(h264_encoder.h264_data.stream,
+		h264_encoder.h264_data.size);
+    if(h264_encoder.h264_data.stream) {
+      free(h264_encoder.h264_data.stream);
+    }
+  }
+  else {
+    /* send raw YUYV frame data */
+    send_video_packet(VIDEO_CMD_FRAME, ptr, length);
+  }
 }
+
+void send_video_packet(int type, void *ptr, long int length) {
+  struct video_msg msg;
+
+  msg.oper = type;
+  msg.size = length;
+  msg.dptr = ptr;
+
+  video_ctl(msg);
+}
+
+void send_stream(unsigned char *ptr, const int length) {
+  long int size;
+  for(long int start = 0; start < length; start += display.h264_param.chunk_size) {
+    if(length - start > display.h264_param.chunk_size) {
+      size = display.h264_param.chunk_size;
+    }
+    else {
+      size = length - start;
+    }
+    send_video_packet(VIDEO_CMD_FRAME, ptr + start, size);
+  }
+}
+
 

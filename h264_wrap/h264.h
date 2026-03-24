@@ -67,9 +67,7 @@ struct h264_config {
 void h264_init_encoder(struct h264_config *config,
 		       int frame_width,
 		       int frame_height);
-void h264_init_decoder(struct h264_config *config,
-		       int frame_width,
-		       int frame_height);
+void h264_init_decoder(struct h264_config *config);
 
 void h264_free_encoder(struct h264_config *config);
 void h264_free_decoder(struct h264_config *config);

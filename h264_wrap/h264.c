@@ -126,9 +126,7 @@ void h264_encode_frame(struct h264_config *config,
   }
 }
 
-void h264_init_decoder(struct h264_config *config,
-		       int frame_width,
-		       int frame_height) {
+void h264_init_decoder(struct h264_config *config) {
   /* cf. tips in avcodec.h */
   config->codec = avcodec_find_decoder(AV_CODEC_ID_H264);
   config->parser = av_parser_init(config->codec->id);
@@ -228,28 +226,20 @@ void h264_decode_frame_internal(struct h264_config *config) {
       /* packed YUV 4:2:2 */
       config->frame_planes.packed = malloc(frame->linesize[0]);
       memcpy(config->frame_planes.packed, frame->data[0], frame->linesize[0]);
+      config->h264_data.output[config->h264_data.output_frames++] = config->frame_planes.packed;
     }
     else if(yuv422p) {
       /* planar YUV 4:2:2 */
-      config->frame_planes.yvec  = malloc(frame->linesize[0]);
-      config->frame_planes.cbvec = malloc(frame->linesize[0]);
-      config->frame_planes.crvec = malloc(frame->linesize[0]);
-      memcpy(config->frame_planes.yvec,  frame->data[0], frame->linesize[0]);
-      memcpy(config->frame_planes.cbvec, frame->data[0], frame->linesize[0]);
-      memcpy(config->frame_planes.crvec, frame->data[0], frame->linesize[0]);
-
       config->frame_planes.packed = malloc(frame->linesize[0] * 2);
 
       for(int k = 0; k < frame->linesize[0]; k += 2) {
-	config->frame_planes.packed[4 * k + 0] = config->frame_planes.yvec [k +  0];
-	config->frame_planes.packed[4 * k + 1] = config->frame_planes.cbvec[k >> 1];
-	config->frame_planes.packed[4 * k + 2] = config->frame_planes.yvec [k +  1];
-	config->frame_planes.packed[4 * k + 3] = config->frame_planes.crvec[k >> 1];
+	config->frame_planes.packed[4 * k + 0] = frame->data[0][k +  0];
+	config->frame_planes.packed[4 * k + 1] = frame->data[1][k >> 1];
+	config->frame_planes.packed[4 * k + 2] = frame->data[0][k +  1];
+	config->frame_planes.packed[4 * k + 3] = frame->data[1][k >> 1];
       }
 
-      free(config->frame_planes.yvec);
-      free(config->frame_planes.cbvec);
-      free(config->frame_planes.crvec);
+      config->h264_data.output[config->h264_data.output_frames++] = config->frame_planes.packed;
     }
     else {
       printf("[H264] Unreachable\n");

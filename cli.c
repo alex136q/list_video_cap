@@ -4,6 +4,8 @@
 extern struct debug_config debug_cfg;
 extern struct display_config display;
 
+extern struct h264_config h264_encoder;
+
 struct cli_args cli;
 
 
@@ -59,6 +61,7 @@ void show_help_text() {
 	   "\n./list_video_cap watch -d <path> -i <integer>\n\tOpens a window displaying the camera feed.\n"
 	   "\n"
 	   "Flags:\n"
+	   "\n-c\n\tFallback to raw frame data channel. The absence of this flag causes the application to stream H.264-encoded packets.\n"
 	   "\n-f <FPS>\n\tLimit rendering frame rate to <FPS>.\n"
 	   "\n-v\n\tEnable debug messages.\n"
 	   "\n-s <width> <height>\n\tVideo capture frame and window size hints for the V4L2 driver.\n"
@@ -102,6 +105,9 @@ void populate_cli_arguments(int argc, char **argv) {
 
   display.window.width = display.capture.req_width = 800;
   display.window.height = display.capture.req_height = 600;
+
+  display.h264_param.use_h264 = 1;
+  display.h264_param.chunk_size = 4096;
 
   for(int arg = 2; arg < argc; ++arg) {
     if(strcmp(argv[arg], "-d") == 0) {
@@ -158,10 +164,21 @@ void populate_cli_arguments(int argc, char **argv) {
       display.window.width = display.capture.req_width = atoi(argv[++arg]);
       display.window.height = display.capture.req_height = atoi(argv[++arg]);
     }
+    else if(strcmp(argv[arg], "-b") == 0) {
+      display.window.enable_border = 1;
+    }
+    else if(strcmp(argv[arg], "-c") == 0) {
+      display.h264_param.use_h264 = 0;
+    }
+    else if(strcmp(argv[arg], "-k") == 0 && argc > arg) {
+      display.h264_param.chunk_size = atoi(argv[++arg]);
+    }
     else {
       show_cli_error_text(arg);
     }
   }
+
+  h264_init_encoder(&h264_encoder, display.capture.req_width, display.capture.req_height);
 }
 
 void show_cli_error_text(int arg) {

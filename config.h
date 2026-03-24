@@ -8,6 +8,12 @@ struct display_config {
     int req_width;
     int req_height;
   } capture;
+
+  struct {
+    int use_h264;
+    int chunk_size;
+  } h264_param;
+
   struct {
     int width;
     int pitch;
