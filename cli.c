@@ -62,6 +62,7 @@ void show_help_text() {
 	   "\n"
 	   "Flags:\n"
 	   "\n-c\n\tFallback to raw frame data channel. The absence of this flag causes the application to stream H.264-encoded packets.\n"
+	   "\n-k <SIZE>\n\tSize of the H.264 packets to be streamed to the graphics thread.\n"
 	   "\n-f <FPS>\n\tLimit rendering frame rate to <FPS>.\n"
 	   "\n-v\n\tEnable debug messages.\n"
 	   "\n-s <width> <height>\n\tVideo capture frame and window size hints for the V4L2 driver.\n"
