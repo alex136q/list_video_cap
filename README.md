@@ -43,7 +43,8 @@ Run `./list_video_cap help` for a summary of the supported commands and their ar
     Flags:
 
     -c
-	    Fallback to raw frame data channel. The absence of this flag causes the application to stream H.264-encoded packets.
+	    Fallback to raw frame data channel. The absence of this flag
+	    causes the application to stream H.264-encoded packets.
 
     -k <SIZE>
 	    Size of the H.264 packets to be streamed to the graphics thread.
