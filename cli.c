@@ -109,7 +109,7 @@ void populate_cli_arguments(int argc, char **argv) {
   display.window.height = display.capture.req_height = 600;
 
   display.h264_param.use_h264 = 1;
-  display.h264_param.chunk_size = 4096;
+  display.h264_param.chunk_size = 1024;
 
   for(int arg = 2; arg < argc; ++arg) {
     if(strcmp(argv[arg], "-d") == 0) {
@@ -117,21 +117,22 @@ void populate_cli_arguments(int argc, char **argv) {
     }
     else if(strcmp(argv[arg], "-o") == 0) {
       cli.frame_capture_path = argv[++arg];
+      char cmd[1024];
+      sprintf(cmd, "rm \"%s\"", cli.frame_capture_path);
+      system(cmd);
     }
     else if(strcmp(argv[arg], "-i") == 0) {
       cli.video_dev_input = atoi(argv[++arg]);
     }
     else if(strcmp(argv[arg], "-m") == 0) {
       debug_cfg.show_memory_dump = 1;
+      debug_cfg.enable_debug_msgs = 1;
+      h264_encoder.debug_info = 1;
+      h264_encoder.dump_bytes = 1;
     }
     else if(strcmp(argv[arg], "-v") == 0) {
       debug_cfg.enable_debug_msgs = 1;
       h264_encoder.debug_info = 1;
-    }
-    else if(strcmp(argv[arg], "-b") == 0) {
-      debug_cfg.enable_debug_msgs = 1;
-      h264_encoder.debug_info = 1;
-      h264_encoder.dump_bytes = 1;
     }
     else if(strcmp(argv[arg], "-f") == 0 && argc > arg) {
       const int freq_hz = atoi(argv[++arg]); /* max. FPS */
