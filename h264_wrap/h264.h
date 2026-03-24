@@ -9,19 +9,30 @@
 #include <time.h>
 #include <x264.h>
 #include <libavcodec/avcodec.h>
+#include <libavutil/frame.h>
+#include <libavutil/pixfmt.h>
 
 
 /* wrapper on top of libx264 (encoding) and libavcodec (decoding) */
 
 struct h264_config {
-  /* internal */
+  /* internal, libx264 */
   x264_t *encoder;
   x264_param_t params;
 
+  /* internal, libavcodec */
+  AVCodec *codec;
+  AVCodecParserContext *parser;
+  AVCodecContext *context;
+  AVPacket *packet;
+
   struct {
-    /* input/output */
+    /* input */
     unsigned char *stream;
     long size;
+    /* output */
+    unsigned char *output[256]; /* individual frames */
+    long output_frames;
     /* internal */
     x264_nal_t *nals;
     int nal_count;
@@ -46,6 +57,10 @@ struct h264_config {
     unsigned char *cbvec;
     unsigned char *crvec;
   } frame_planes;
+
+  /* debug */
+  int debug_info;
+  int dump_bytes;
 };
 
 
@@ -65,13 +80,18 @@ void h264_encode_frame(struct h264_config *config,
 		       unsigned char *data);
 
 void h264_decode_frame(struct h264_config *config,
-		       unsigned char *data);
+		       unsigned char *data,
+		       long int size);
+
+void h264_decode_flush(struct h264_config *config);
 
 void extract_array(unsigned char *src,
 		   long length,
 		   int offset,
 		   int stride,
 		   unsigned char **dst);
+
+void dump_array(unsigned char *ptr, long size);
 
 #endif
 

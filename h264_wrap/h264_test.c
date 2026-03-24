@@ -9,8 +9,6 @@ unsigned char sinusoid(unsigned char bias,
 
 unsigned char *solid_frame(int width, int height, long *size, float t);
 
-void dump_array(unsigned char *ptr, long size);
-
 void save_array(const unsigned char *raw_yuyv,
 		long size,
 		const char *filename_yuyv);
@@ -176,29 +174,20 @@ void save_array(const unsigned char *raw_yuyv,
   fclose(fd);
 }
 
-void dump_array(unsigned char *ptr, long size) {
-  static const int bytes_per_line = 0x20;
-  for(long ptr0 = 0; ptr0 < size; ptr0 += bytes_per_line) {
-    long ptr1;
-    printf("\t+%04lX ", ptr0);
-    for(ptr1 = 0; ptr1 < bytes_per_line && (ptr0 + ptr1 < size); ++ptr1) {
-      printf("%02X", ptr[ptr0 + ptr1]);
-    }
-    printf("\n");
-  }
-}
-
-
 void parse_h264_cli_args(int argc, char **argv,
 			 struct h264_config *config) {
   h264_cli_config.test_encoding = 0;
   h264_cli_config.test_decoding = 0;
+
   h264_cli_config.export_images = 0;
   h264_cli_config.frame_count = 1000;
+
   config->frame_config.width = 1920;
   config->frame_config.height = 1080;
 
-  for(int arg = 0; arg < argc; ++arg) {
+  config->dump_bytes = 0;
+
+  for(int arg = 1; arg < argc; ++arg) {
     if(strcmp(argv[arg], "-x") == 0) {
       h264_cli_config.export_images = 1;
     }
@@ -224,29 +213,31 @@ void parse_h264_cli_args(int argc, char **argv,
       h264_cli_config.test_decoding = 1;
       h264_cli_config.in_stream_path = argv[++arg];
     }
-    else if(strcmp(argv[arg], "--help") == 0) {
+    else if(strcmp(argv[arg], "-b") == 0) {
+      config->dump_bytes = 1;
+    }
+    else if(strcmp(argv[arg], "-v") == 0) {
+      config->debug_info = 1;
+    }
+    else {
+      printf("Unknown flag or argument: %s\n", argv[arg]);
       display_h264_cli_help();
-      exit(0);
+      exit(1);
     }
   }
 }
 
 void display_h264_cli_help() {
-  printf("Usage:\n"
-	 "./h264_test --help\n"
-	 "\tDisplays this summary.\n\n"
-	 "./h264_test -e <PATH>\n"
-	 "\tOutput sample frames in H.264 format.\n\n"
-	 "./h264_test -d <PATH>\n"
-	 "\t(WIP) Decode sample H.264 stream outputted previously.\n\n"
-	 "./h264_test -x\n"
-	 "\tEnables export of images to ./h264_test_data/.\n\n"
-	 "./h264_test -n <count>\n"
-	 "\tSet frame count.\n\n"
-	 "./h264_test -w <width>\n"
-	 "\tSet frame width.\n\n"
-	 "./h264_test -h <height>\n"
-	 "\tSet frame height.\n\n"
+  printf("Flags:\n"
+	 "--help\n\tDisplays this summary.\n\n"
+	 "-e <PATH>\n\tOutput sample frames in H.264 format.\n\n"
+	 "-d <PATH>\n\t(WIP) Decode sample H.264 stream outputted previously.\n\n"
+	 "-x\n\tEnables export of images to ./h264_test_data/.\n\n"
+	 "-n <count>\n\tSet frame count.\n\n"
+	 "-w <width>\n\tSet frame width.\n\n"
+	 "-h <height>\n\tSet frame height.\n\n"
+	 "-b\n\tDump decoded byte packets.\n\n"
+	 "-v\n\tVerbose debugging messages.\n\n"
 	 "");
 }
 
@@ -256,6 +247,19 @@ void decode_test_frames(struct h264_config *config) {
   if(!stream_fd) {
     printf("File does not exist: %s\n", h264_cli_config.in_stream_path);
     return;
+  }
+  int buffer_size = 1024;
+  char buffer[buffer_size];
+  int length;
+  while(1) {
+    length = fread(buffer, 1, buffer_size, stream_fd);
+    if(length != 0) {
+      printf("[H264] Chunk: offset %08lX, size %08X\n", ftell(stream_fd), length);
+      h264_decode_frame(config, buffer, length);
+    }
+    else {
+      break;
+    }
   }
   fclose(stream_fd);
 }

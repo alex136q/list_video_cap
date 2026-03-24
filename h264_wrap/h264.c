@@ -1,5 +1,8 @@
 #include "h264.h"
 
+void h264_decode_frame_internal(struct h264_config *config);
+
+
 void extract_array(unsigned char *src,
 		   long length,
 		   int offset,
@@ -126,16 +129,150 @@ void h264_encode_frame(struct h264_config *config,
 void h264_init_decoder(struct h264_config *config,
 		       int frame_width,
 		       int frame_height) {
-
-  // ... avcodec_receive_packet() ... (?)
-
+  /* cf. tips in avcodec.h */
+  config->codec = avcodec_find_decoder(AV_CODEC_ID_H264);
+  config->parser = av_parser_init(config->codec->id);
+  config->context = avcodec_alloc_context3(config->codec);
+  avcodec_open2(config->context, config->codec, NULL);
+  config->packet = av_packet_alloc();
 }
 
 void h264_free_decoder(struct h264_config *config) {
+  av_parser_close(config->parser);
+  avcodec_free_context(&config->context);
+  av_packet_free(&config->packet);
 }
 
 void h264_decode_frame(struct h264_config *config,
-		       unsigned char *data) {
-  return;
+		       unsigned char *data,
+		       long int size) {
+  const int buffer_size = 4096;
+  char buffer[buffer_size + AV_INPUT_BUFFER_PADDING_SIZE];
+
+  config->h264_data.output_frames = 0;
+
+  int ptr = 0;
+  int size_remaining = size;
+  int count;
+
+  while(size_remaining > 0) {
+    if(config->debug_info) printf("[H264] Position %d/%d in chunk\n", ptr, size);
+
+    count = av_parser_parse2(config->parser, config->context,
+			     &config->packet->data, &config->packet->size,
+			     data + ptr, size_remaining,
+			     AV_NOPTS_VALUE, AV_NOPTS_VALUE, 0);
+    if(count > 0) {
+      if(config->dump_bytes) {
+	if(config->debug_info) printf("[H264] Packet: size %d\n", count);
+	dump_array(data + ptr, count);
+      }
+
+      ptr += count;
+      size_remaining -= count;
+
+      if(config->packet->size) {
+	avcodec_send_packet(config->context, config->packet);
+	h264_decode_frame_internal(config);
+      }
+    }
+    else if(count < 0) {
+      printf("[H264] Parser error\n");
+      exit(0);
+    }
+  }
+}
+
+void h264_decode_frame_internal(struct h264_config *config) {
+  if(config->debug_info) printf("[H264] Decoding frame\n");
+  AVFrame *frame = av_frame_alloc();
+
+  while(1) {
+    int status = avcodec_receive_frame(config->context, frame);
+
+    if(status == AVERROR_EOF) {
+      if(config->debug_info) printf("[H264] End of stream\n");
+      return;
+    }
+    else if(status == AVERROR(EAGAIN)) {
+      if(config->debug_info) printf("[H264] Incomplete frame\n");
+      return;
+    }
+
+    int yuyv422 = 0, yuv422p = 0;
+
+    if(frame->format == AV_PIX_FMT_YUYV422) {
+      if(config->debug_info) printf("[H264] YUYV 4:2:2 non-planar (packed)\n");
+      yuyv422 = 1;
+    }
+    else if(frame->format == AV_PIX_FMT_YUV422P) {
+      if(config->debug_info) printf("[H264] YUYV 4:2:2 planar\n");
+      yuv422p = 1;
+    }
+    else {
+      printf("[H264] ffmpeg returned pixel format other than YUYV 4:2:2 or YUV422P: %d\n",
+	     frame->format);
+    }
+
+    config->frame_config.width = frame->width;
+    config->frame_config.height = frame->height;
+
+    if(config->debug_info) {
+      for(int k = 0; k < AV_NUM_DATA_POINTERS; ++k) {
+	printf("[H264] Frame: plane %02X size %08X ptr %016lX\n",
+	       k, frame->linesize[k], (long int)frame->data[k]);
+      }
+    }
+
+    if(yuyv422) {
+      /* packed YUV 4:2:2 */
+      config->frame_planes.packed = malloc(frame->linesize[0]);
+      memcpy(config->frame_planes.packed, frame->data[0], frame->linesize[0]);
+    }
+    else if(yuv422p) {
+      /* planar YUV 4:2:2 */
+      config->frame_planes.yvec  = malloc(frame->linesize[0]);
+      config->frame_planes.cbvec = malloc(frame->linesize[0]);
+      config->frame_planes.crvec = malloc(frame->linesize[0]);
+      memcpy(config->frame_planes.yvec,  frame->data[0], frame->linesize[0]);
+      memcpy(config->frame_planes.cbvec, frame->data[0], frame->linesize[0]);
+      memcpy(config->frame_planes.crvec, frame->data[0], frame->linesize[0]);
+
+      config->frame_planes.packed = malloc(frame->linesize[0] * 2);
+
+      for(int k = 0; k < frame->linesize[0]; k += 2) {
+	config->frame_planes.packed[4 * k + 0] = config->frame_planes.yvec [k +  0];
+	config->frame_planes.packed[4 * k + 1] = config->frame_planes.cbvec[k >> 1];
+	config->frame_planes.packed[4 * k + 2] = config->frame_planes.yvec [k +  1];
+	config->frame_planes.packed[4 * k + 3] = config->frame_planes.crvec[k >> 1];
+      }
+
+      free(config->frame_planes.yvec);
+      free(config->frame_planes.cbvec);
+      free(config->frame_planes.crvec);
+    }
+    else {
+      printf("[H264] Unreachable\n");
+      exit(1);
+    }
+  }
+
+  if(frame) av_frame_free(&frame);
+}
+
+void h264_decode_flush(struct h264_config *config) {
+  avcodec_send_packet(config->context, NULL);
+}
+
+void dump_array(unsigned char *ptr, long size) {
+  static const int bytes_per_line = 0x20;
+  for(long ptr0 = 0; ptr0 < size; ptr0 += bytes_per_line) {
+    long ptr1;
+    printf("\t+%04lX ", ptr0);
+    for(ptr1 = 0; ptr1 < bytes_per_line && (ptr0 + ptr1 < size); ++ptr1) {
+      printf("%02X", ptr[ptr0 + ptr1]);
+    }
+    printf("\n");
+  }
 }
 
