@@ -64,6 +64,7 @@ void show_help_text() {
 	   "\n-c\n\tFallback to raw frame data channel. The absence of this flag causes the application to stream H.264-encoded packets.\n"
 	   "\n-k <SIZE>\n\tSize of the H.264 packets to be streamed to the graphics thread.\n"
 	   "\n-f <FPS>\n\tLimit rendering frame rate to <FPS>.\n"
+	   "\n-j\n\tUse planar YUV 4:2:2 encoding. Default encoding is packed YUV 4:2:2.\n"
 	   "\n-v\n\tEnable debug messages.\n"
 	   "\n-b\n\tEnable H.264 packet byte dumps (implies -v).\n"
 	   "\n-s <width> <height>\n\tVideo capture frame and window size hints for the V4L2 driver.\n"
@@ -105,11 +106,12 @@ void populate_cli_arguments(int argc, char **argv) {
   display.window.fixed_size = 1;
   display.window.enable_border = 0;
 
-  display.window.width = display.capture.req_width = 800;
-  display.window.height = display.capture.req_height = 600;
+  display.window.width = display.capture.req_width = 640;
+  display.window.height = display.capture.req_height = 480;
 
   display.h264_param.use_h264 = 1;
   display.h264_param.chunk_size = 1024;
+  display.h264_param.colorspace = X264_CSP_YUYV;
 
   for(int arg = 2; arg < argc; ++arg) {
     if(strcmp(argv[arg], "-d") == 0) {
@@ -182,12 +184,18 @@ void populate_cli_arguments(int argc, char **argv) {
     else if(strcmp(argv[arg], "-k") == 0 && argc > arg) {
       display.h264_param.chunk_size = atoi(argv[++arg]);
     }
+    else if(strcmp(argv[arg], "-j") == 0) {
+      display.h264_param.colorspace = X264_CSP_I422;
+    }
     else {
       show_cli_error_text(arg);
     }
   }
 
-  h264_init_encoder(&h264_encoder, display.capture.req_width, display.capture.req_height);
+  h264_init_encoder(&h264_encoder,
+		    display.capture.req_width,
+		    display.capture.req_height,
+		    display.h264_param.colorspace);
 }
 
 void show_cli_error_text(int arg) {

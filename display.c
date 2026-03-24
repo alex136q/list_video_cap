@@ -54,15 +54,22 @@ void video_ctl(struct video_msg cmd) {
   else if(cmd.oper == VIDEO_CMD_FRAME) {
     debug_f0("[VIDEO] Cloning "); dump_msg_header(&cmd);
 
-    if(cmd.size != 0 && cmd.dptr != NULL) {
-      if(display.h264_param.use_h264) {
-	h264_decode_frame(&h264_decoder, cmd.dptr, cmd.size);
+    if(cli.frame_capture_path != NULL) {
+      debug_s1("[VIDEO] Dumping packet into %s\n", cli.frame_capture_path);
+      FILE *h264_dump_fd = fopen(cli.frame_capture_path, "a");
+      fwrite(cmd.dptr, 1, cmd.size, h264_dump_fd);
+      fclose(h264_dump_fd);
+    }
 
-	if(cli.frame_capture_path != NULL && h264_decoder.dump_bytes) {
-	  FILE *h264_dump_fd = fopen(cli.frame_capture_path, "a");
-	  fwrite(cmd.dptr, 1, cmd.size, h264_dump_fd);
-	  fclose(h264_dump_fd);
-	}
+    if(cmd.size != 0 && cmd.dptr != NULL) {
+
+      if(display.h264_param.use_h264) {
+	unsigned char *data = malloc(cmd.size + 0x400);
+	memcpy(data, cmd.dptr, cmd.size);
+
+	h264_decode_frame(&h264_decoder, data, cmd.size);
+
+	free(data);
 
 	long int total_size = 0;
 
@@ -71,9 +78,9 @@ void video_ctl(struct video_msg cmd) {
 	for(int frame = 0; frame < frame_count; ++frame) {
 	  struct video_msg msg_copy;
 	  msg_copy.oper = cmd.oper;
-	  msg_copy.size = cmd.size;
 
 	  const int frame_size = h264_decoder.h264_data.frame_sizes[frame];
+	  msg_copy.size = frame_size;
 	  total_size += frame_size;
 
 	  msg_copy.dptr = malloc(frame_size);
@@ -148,7 +155,7 @@ void print_messages(struct queue *stk, const char *debug_label) {
 
   debug_s1("[VIDEO] %s", debug_label);
   debug_s1(" TS %s ", now);
-  debug_f4("[VIDEO] queue sizes: R%1d %08X, W%1d %08X\n",
+  debug_f4("[VIDEO] queue sizes: R%d %08Xh, W%d %08Xh\n",
 	   display.queue_r.lock, queue_length(&display.queue_r),
 	   display.queue_w.lock, queue_length(&display.queue_w));
 
@@ -258,7 +265,7 @@ void process_cmds() {
 }
 
 int process_cmd(const struct video_msg *cmd) {
-    debug_f3("[RENDER] received cmd(%08lX %08lX %016lX)\n",
+    debug_f3("[RENDER] received cmd(%08lXh %08lXh %016lXh)\n",
 	     cmd->oper, cmd->size, (long int) cmd->dptr);
 
     switch(cmd->oper) {
@@ -315,7 +322,7 @@ void *main_loop(void *dummy) {
 
   glewInit();
 
-  debug_f1("[RENDER] [MAIN] Created window: %016X\n",
+  debug_f1("[RENDER] [MAIN] Created window: %016Xh\n",
 	   (long int)display.window.glfw_id);
   debug_f0("[RENDER] [MAIN] GLFW main loop.\n");
 
@@ -372,13 +379,13 @@ void resize_window(int msg_width, int msg_height) {
 
 void clear_msg(struct video_msg *msg) {
   if(msg->dptr != NULL && msg->size != 0) {
-    debug_f1("[RENDER] Cmd. oper. %016X", msg->oper);
-    debug_f1("[RENDER] Cmd. size  %016X", msg->size);
-    debug_f1("[RENDER] Cmd. ptr.  %016X", (long int)msg->dptr);
+    debug_f1("[RENDER] Cmd. oper. %016Xh", msg->oper);
+    debug_f1("[RENDER] Cmd. size  %016Xh", msg->size);
+    debug_f1("[RENDER] Cmd. ptr.  %016Xh", (long int)msg->dptr);
     msg->oper = VIDEO_CMD_WRITE;
     if(msg->size != 0 && msg->dptr != NULL) {
       if(display.window.frame != NULL) free(display.window.frame);
-      debug_f1("[RENDER] allocating space for frame at %016X\n",
+      debug_f1("[RENDER] allocating space for frame at %016Xh\n",
 	       (long int)msg->dptr);
       display.window.frame = malloc(msg->size);
       memcpy(display.window.frame, msg->dptr, msg->size);
@@ -571,7 +578,7 @@ void render_frame() {
   };
   if(display.test.fill_pixel)
   for(int k = 0; k < sizeof(xycs) / sizeof(xycs[0]); k += 4) {
-    // printf("Pixel %d %d color %08X\n", xycs[k + 0], xycs[k + 1], xycs[k + 2]);
+    // printf("Pixel %d %d color %08Xh\n", xycs[k + 0], xycs[k + 1], xycs[k + 2]);
     const int px_ptr = xycs[k + 0] * display.frame.width + xycs[k + 1];
     ((unsigned int *)grayscale_image)[px_ptr] = xycs[k + 2];
   }

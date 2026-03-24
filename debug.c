@@ -74,7 +74,7 @@ void debug_f0(const char *template) {
 
 void dump_msg(const struct video_msg *msg) {
   if(!debug_cfg.enable_debug_msgs) return;
-  printf("[DEBUG] cmd(%08X %08X %016lX)\n",
+  printf("[DEBUG] cmd(%08Xh %08Xh %016lXh)\n",
 	 msg->oper, msg->size, (const long int)msg->dptr);
   printf("    ");
   for(int b = 0; b < bytes_per_mem_dump_line; ++b) {
@@ -96,7 +96,7 @@ void dump_msg(const struct video_msg *msg) {
 
 void dump_msg_header(const struct video_msg *msg) {
   if(!debug_cfg.enable_debug_msgs) return;
-  debug_f3("cmd(%08X %08X %016lX)\n",
+  debug_f3("cmd(%08Xh %08Xh %016lXh)\n",
 	   msg->oper, msg->size, (const long int)msg->dptr);
 }
 
@@ -108,7 +108,7 @@ void dump_msg_headers(const struct queue *stk) {
 void dump_queue_sizes() {
   if(!debug_cfg.enable_debug_msgs) return;
   debug_f2("[VIDEO] [video_ctl] queue sizes: "
-	   "R %08X, W %08X\n",
+	   "R %04Xh, W %04Xh\n",
 	   queue_length(&display.queue_r),
 	   queue_length(&display.queue_w));
 }

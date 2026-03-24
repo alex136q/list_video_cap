@@ -6,6 +6,9 @@ extern struct display_config display;
 struct h264_config h264_encoder;
 
 
+void send_h264_headers(struct h264_config *config);
+
+
 void traverse_video_device_list() {
   if(cli.video_dev_path != NULL) {
     probe_capab(cli.video_dev_path);
@@ -61,7 +64,7 @@ void dump_capab_list(const struct v4l2_capability *caps) {
 }
 
 void dump_capab_flags(unsigned int cap_flags) {
-  debug_f1("Capab. <%08X>:\n", cap_flags);
+  debug_f1("Capab. <%08Xh>:\n", cap_flags);
 
   /* Bitfields cf. https://linuxtv.org/downloads/v4l-dvb-apis-new/userspace-api/v4l/vidioc-querycap.html#vidioc-querycap */
   if(cap_flags & 0x80000000) debug_f0("\tbit 31 -- has DEVICE_CAPS\n");
@@ -126,7 +129,7 @@ void dump_video_input(const struct v4l2_input *input_s) {
   debug_s1(" <%s>\n", (const char *)input_s->name);
   debug_f1("Type %d", input_s->type);
   debug_s1(" -- %s\n", input_type_descs[input_s->type]);
-  debug_f1("Audio bitfields <%08X>\n", input_s->audioset);
+  debug_f1("Audio bitfields <%08Xh>\n", input_s->audioset);
 }
 
 void dump_video_standards(int video_devfd) {
@@ -136,7 +139,7 @@ void dump_video_standards(int video_devfd) {
   for(index = 0;; ++index) {
     std_s.index = index;
     if(ioctl(video_devfd, VIDIOC_ENUMSTD, &std_s) < 0) break;
-    debug_f2(" (%04X %016llX", std_s.index, std_s.id);
+    debug_f2(" (%04Xh %016lXh", std_s.index, std_s.id);
     debug_s1(" \"%s\")", (const char *)std_s.name);
   }
   if(index == 0) debug_f0(" (none)");
@@ -154,7 +157,7 @@ void dump_image_formats(int video_devfd) {
     if(ioctl(video_devfd, VIDIOC_ENUM_FMT, &format_s) < 0) break;
     char px_fmt[5] = {0x00, 0x00, 0x00, 0x00, 0x00};
     strncpy(px_fmt, (char*)&format_s.pixelformat, 4);
-    debug_f2("\t%04X %08X", format_s.index, format_s.flags);
+    debug_f2("\t%04Xh %08Xh", format_s.index, format_s.flags);
     debug_s1(" <%s>", (const char *)px_fmt);
     debug_s1(" <%s>\n", (const char *)format_s.description);
     dump_image_format_flags(format_s.flags);
@@ -268,8 +271,8 @@ void save_frame() {
   const unsigned int buf_size = buf_s.length;
 
   debug_f2("MMAP with:\n"
-	 "\t%08X size\n"
-	 "\t%08X offset\n",
+	 "\t%08Xh size\n"
+	 "\t%08Xh offset\n",
 	 buf_size,
 	 buf_base);
 
@@ -279,7 +282,7 @@ void save_frame() {
   buf_data_ptr = (unsigned char *) mmap(NULL, buf_size, PROT_READ | PROT_WRITE,
 					MAP_SHARED, video_devfd, buf_base);
 
-  debug_f1("MMAP address: %016lX\n", (unsigned long int)buf_data_ptr);
+  debug_f1("MMAP address: %016lXh\n", (unsigned long int)buf_data_ptr);
   if((long int)buf_data_ptr <= 0) {
     debug_f0("Null address.\n");
     close(video_devfd);
@@ -353,7 +356,7 @@ void dump_capture_image_format(const struct v4l2_format *fmt_s) {
 
 void dump_buffer_request_capabs(const struct v4l2_requestbuffers *req_bufs_s) {
   unsigned int flags = req_bufs_s->capabilities;
-  debug_f1("Buffer request capabilities: %08X\n", flags);
+  debug_f1("Buffer request capabilities: %08Xh\n", flags);
   if(flags & (1 << 2)) debug_f0("\tDMABUF\n");
   if(flags & (1 << 1)) debug_f0("\tUSRPTR\n");
   if(flags & (1 << 0)) debug_f0("\tMMAP\n");
@@ -362,15 +365,15 @@ void dump_buffer_request_capabs(const struct v4l2_requestbuffers *req_bufs_s) {
 
 void dump_buffer_metadata(const struct v4l2_buffer *buf_s,
 			  const void *buf_data_ptr) {
-  debug_f1("Buffer %08X:\n", buf_s->index);
-  debug_f1("\t%016X B  length\n", buf_s->bytesused);
-  debug_f1("\t%016X B  size allocated\n", buf_s->length);
-  debug_f1("\t%016lX    address\n", (long int)buf_data_ptr);
+  debug_f1("Buffer %08Xh:\n", buf_s->index);
+  debug_f1("\t%016Xh B  length\n", buf_s->bytesused);
+  debug_f1("\t%016Xh B  size allocated\n", buf_s->length);
+  debug_f1("\t%016lXh    address\n", (long int)buf_data_ptr);
   debug_f1("\t%16d    frames\n", buf_s->sequence);
   debug_f1("\t%16ld    timestamp (s)\n", buf_s->timestamp.tv_sec);
   debug_f1("\t%16ld    timestamp (us)\n", buf_s->timestamp.tv_usec);
 
-  debug_f1("\tBuffer flags: %08X\n", buf_s->flags);
+  debug_f1("\tBuffer flags: %08Xh\n", buf_s->flags);
   debug_f1("\t\tprepared: %d\n", ((buf_s->flags & (1 << 10)) != 0));
   debug_f1("\t\tin-req.:  %d\n", ((buf_s->flags & (1 << 7)) != 0));
   debug_f1("\t\terror:    %d\n", ((buf_s->flags & (1 << 6)) != 0));
@@ -485,8 +488,8 @@ void stream_frames() {
       video_ctl(size_msg);
     }
 
-    if(h264_encoder.frame_config.width != frame_width
-       || h264_encoder.frame_config.height != frame_height) {
+    if(frame_width > 0 && frame_height > 0
+       && display.h264_param.use_h264) {
       h264_change_encoder_frame_size(&h264_encoder,
 				     frame_width, frame_height);
     }
@@ -544,7 +547,14 @@ void stream_frames() {
 
 void send_frame(unsigned char *ptr, const int length)
 {
+  static int sent_headers = 0;
+
   if(display.h264_param.use_h264) {
+    if(!sent_headers) {
+      send_h264_headers(&h264_encoder);
+      sent_headers = 1;
+    }
+
     /* send H.264-encoded stream of packets */
     h264_encode_frame(&h264_encoder, ptr);
 
@@ -600,4 +610,30 @@ void send_stream(unsigned char *ptr, const int length) {
   }
 }
 
+void send_h264_headers(struct h264_config *config) {
+  h264_get_headers(config);
+
+  long int headers_size = 0;
+  for(int nal = 0; nal < h264_encoder.h264_data.nal_count; ++nal) {
+    headers_size += h264_encoder.h264_data.nals[nal].i_payload;
+  }
+
+  unsigned char *headers_data = malloc(headers_size);
+
+  long int ptr = 0;
+
+  for(int nal = 0; nal < h264_encoder.h264_data.nal_count; ++nal) {
+    int header_size = h264_encoder.h264_data.nals[nal].i_payload;
+
+    memcpy(headers_data + ptr,
+	   h264_encoder.h264_data.nals[nal].p_payload,
+	   header_size);
+
+    ptr += header_size;
+  }
+
+  debug_f1("[CAPTURE] Sending H.264 headers: size %ld bytes\n", headers_size);
+
+  send_video_packet(VIDEO_CMD_FRAME, headers_data, headers_size);
+}
 

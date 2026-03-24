@@ -12,6 +12,7 @@ struct display_config {
   struct {
     int use_h264;
     int chunk_size;
+    int colorspace;
   } h264_param;
 
   struct {
