@@ -77,7 +77,9 @@ void encode_test_frames(struct h264_config *config) {
     h264_encode_frame(config, raw_yuyv);
 
     printf("Frame %d: %d NALs\n", frame, config->h264_data.nal_count);
+
     long nals_size = 0;
+
     for(int k = 0; k < config->h264_data.nal_count; ++k) {
       int size = config->h264_data.nals[k].i_payload;
       nals_size += size;

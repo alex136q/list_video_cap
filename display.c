@@ -3,7 +3,9 @@
 extern struct cli_args cli;
 
 struct display_config display;
+
 struct h264_config h264_decoder;
+extern struct h264_config h264_encoder;
 
 void video_ctl(struct video_msg cmd) {
   debug_f0("[VIDEO] [video_ctl] "); dump_msg_header(&cmd);
@@ -25,6 +27,8 @@ void video_ctl(struct video_msg cmd) {
     init_state();
     init_display();
     h264_init_decoder(&h264_decoder);
+    h264_encoder.debug_info = h264_encoder.debug_info;
+    h264_encoder.dump_bytes = h264_encoder.dump_bytes;
   }
   else if(cmd.oper == VIDEO_CMD_SET_ARGC) {
     /* required by GLUT in the previous iteration */
@@ -48,34 +52,70 @@ void video_ctl(struct video_msg cmd) {
     display.frame.pitch = cmd.size;
   }
   else if(cmd.oper == VIDEO_CMD_FRAME) {
-    debug_f0("[VIDEO] cloning "); dump_msg_header(&cmd);
+    debug_f0("[VIDEO] Cloning "); dump_msg_header(&cmd);
 
-    struct video_msg msg_copy;
-    msg_copy.oper = cmd.oper;
 
     if(cmd.size != 0 && cmd.dptr != NULL) {
       if(display.h264_param.use_h264) {
 	h264_decode_frame(&h264_decoder, cmd.dptr, cmd.size);
+
+	const int frame_count = h264_decoder.h264_data.output_frames;
+
+	long int total_size = 0;
+
+	for(int frame = 0; frame < frame_count; ++frame) {
+	  struct video_msg msg_copy;
+	  msg_copy.oper = cmd.oper;
+	  msg_copy.size = cmd.size;
+
+	  const int frame_size = h264_decoder.h264_data.frame_sizes[frame];
+	  total_size += frame_size;
+
+	  msg_copy.dptr = malloc(frame_size);
+	  memcpy(msg_copy.dptr, h264_decoder.h264_data.output[frame], frame_size);
+
+	  debug_f2("[VIDEO] %d/%d cloned as ", (frame + 1), frame_count);
+	  dump_msg_header(&msg_copy);
+	  debug_f2("[VIDEO] Message queued (%d/%d)\n",
+		   queue_length(&display.queue_r),
+		   display.queue_r.max_length);
+
+	  queue_push(&display.queue_r, &msg_copy);
+	}
+
+	debug_f3("[VIDEO] Decoded packet:"
+		 " packed size %d"
+		 " frame count %d"
+		 " frame sizes %ld bytes"
+		 "\n",
+		 cmd.size,
+		 frame_count,
+		 total_size);
       }
       else {
+	struct video_msg msg_copy;
+	msg_copy.oper = cmd.oper;
 	msg_copy.size = cmd.size;
+
 	msg_copy.dptr = malloc(cmd.size);
 	memcpy(msg_copy.dptr, cmd.dptr, cmd.size);
+
+	debug_f0("[VIDEO] cloned as "); dump_msg_header(&msg_copy);
+	debug_f2("[VIDEO] message queued (%d/%d)\n",
+		 queue_length(&display.queue_r),
+		 display.queue_r.max_length);
+
+	queue_push(&display.queue_r, &msg_copy);
       }
     }
-    else {
-      msg_copy.dptr = NULL;
-    }
-
-    debug_f0("[VIDEO] cloned as "); dump_msg_header(&msg_copy);
-    debug_f2("[VIDEO] message queued (%d/%d)\n",
-	     queue_length(&display.queue_r),
-	     display.queue_r.max_length);
-
-    queue_push(&display.queue_r, &msg_copy);
 
     print_messages(&display.queue_r, "R");
     print_messages(&display.queue_w, "W");
+  }
+  else if(cmd.oper == VIDEO_CMD_CLOSE) {
+    debug_f0("[VIDEO] Quitting\n");
+    display.window.open = 0;
+    h264_free_decoder(&h264_decoder);
   }
   else {
     debug_f1("[VIDEO] Unknown message type: %d; skipping\n", cmd.oper);
@@ -145,7 +185,7 @@ void rename_window() {
     return;
   }
 
-  char window_title[128];
+  char window_title[256];
 
   sprintf(window_title,
 	  "Stream: %6.2lf FPSr (%ld), %6.2lf FPSc (%ld), %.2lf s, "
@@ -443,6 +483,13 @@ void resize_fb() {
 void render_frame() {
   if(!display.frame.size) {
     debug_f0("[FRAME] empty frame, skipping\n");
+    debug_f2("[FRAME] window  size: %dx%d\n",
+	     display.window.width, display.window.height);
+    debug_f2("[FRAME] frame   size: %dx%d\n",
+	     display.frame.width, display.frame.height);
+    debug_f2("[FRAME] enc. f. size: %dx%d\n",
+	     h264_encoder.frame_config.width,
+	     h264_encoder.frame_config.height);
     return;
   }
 

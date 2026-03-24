@@ -65,6 +65,18 @@ void h264_get_headers(struct h264_config *config) {
 
 void h264_encode_frame(struct h264_config *config,
 		       unsigned char *data) {
+
+  config->frame_config.size = (2 * (long)config->frame_config.width
+			       * (long)config->frame_config.height);
+
+  if(config->debug_info) {
+    printf("[H264] Frame data at %016lX\n", (long int)data);
+    printf("[H264] Encoding frame of size %dx%d (%ld bytes)...\n",
+	   config->frame_config.width,
+	   config->frame_config.height,
+	   config->frame_config.size);
+  }
+
   /* required parameter for x264_encoder_encode */
   x264_picture_t output_frame;
   x264_picture_alloc(&output_frame,
@@ -98,9 +110,6 @@ void h264_encode_frame(struct h264_config *config,
 
   input_frame.i_pts = ++config->frame_config.frame_index;
 
-  config->h264_data.nals = NULL;
-  config->h264_data.nal_count = 0;
-
   x264_encoder_encode(config->encoder,
 		      &config->h264_data.nals,
 		      &config->h264_data.nal_count,
@@ -113,6 +122,11 @@ void h264_encode_frame(struct h264_config *config,
   }
 
   config->h264_data.stream = malloc(nals_size);
+  config->h264_data.size = nals_size;
+
+  if(config->debug_info) {
+    printf("[H264] total NAL size: %ld\n", nals_size);
+  }
 
   /* libx264 "guarantees the NALs are contiguous in memory"... alas... SEGFAULT! */
   // memcpy(config->h264_data.stream, config->h264_data.nals[0].p_payload, nals_size);
@@ -144,10 +158,12 @@ void h264_free_decoder(struct h264_config *config) {
 void h264_decode_frame(struct h264_config *config,
 		       unsigned char *data,
 		       long int size) {
-  const int buffer_size = 4096;
+
+  const int buffer_size = 16384;
   char buffer[buffer_size + AV_INPUT_BUFFER_PADDING_SIZE];
 
   config->h264_data.output_frames = 0;
+  config->h264_data.size = 0;
 
   int ptr = 0;
   int size_remaining = size;
@@ -160,6 +176,7 @@ void h264_decode_frame(struct h264_config *config,
 			     &config->packet->data, &config->packet->size,
 			     data + ptr, size_remaining,
 			     AV_NOPTS_VALUE, AV_NOPTS_VALUE, 0);
+
     if(count > 0) {
       if(config->dump_bytes) {
 	if(config->debug_info) printf("[H264] Packet: size %d\n", count);
@@ -169,7 +186,7 @@ void h264_decode_frame(struct h264_config *config,
       ptr += count;
       size_remaining -= count;
 
-      if(config->packet->size) {
+      if(config->packet->size > 0) {
 	avcodec_send_packet(config->context, config->packet);
 	h264_decode_frame_internal(config);
       }
@@ -190,11 +207,11 @@ void h264_decode_frame_internal(struct h264_config *config) {
 
     if(status == AVERROR_EOF) {
       if(config->debug_info) printf("[H264] End of stream\n");
-      return;
+      break;
     }
     else if(status == AVERROR(EAGAIN)) {
       if(config->debug_info) printf("[H264] Incomplete frame\n");
-      return;
+      break;
     }
 
     int yuyv422 = 0, yuv422p = 0;
@@ -208,7 +225,8 @@ void h264_decode_frame_internal(struct h264_config *config) {
       yuv422p = 1;
     }
     else {
-      printf("[H264] ffmpeg returned pixel format other than YUYV 4:2:2 or YUV422P: %d\n",
+      printf("[H264] ffmpeg returned pixel format"
+	     " other than YUYV 4:2:2 or YUV422P: %d\n",
 	     frame->format);
     }
 
@@ -226,7 +244,19 @@ void h264_decode_frame_internal(struct h264_config *config) {
       /* packed YUV 4:2:2 */
       config->frame_planes.packed = malloc(frame->linesize[0]);
       memcpy(config->frame_planes.packed, frame->data[0], frame->linesize[0]);
-      config->h264_data.output[config->h264_data.output_frames++] = config->frame_planes.packed;
+
+      config->h264_data.size += frame->linesize[0];
+
+      config->h264_data.output[config->h264_data.output_frames] =
+	config->frame_planes.packed;
+
+      config->h264_data.frame_sizes[config->h264_data.output_frames] =
+	frame->linesize[0];
+
+      ++config->h264_data.output_frames;
+
+      printf("[H264] Decoded frame of size %dx%d\n",
+	     frame->width, frame->height);
     }
     else if(yuv422p) {
       /* planar YUV 4:2:2 */
@@ -239,7 +269,18 @@ void h264_decode_frame_internal(struct h264_config *config) {
 	config->frame_planes.packed[4 * k + 3] = frame->data[1][k >> 1];
       }
 
-      config->h264_data.output[config->h264_data.output_frames++] = config->frame_planes.packed;
+      config->h264_data.size += frame->linesize[0] * 2;
+
+      config->h264_data.output[config->h264_data.output_frames] =
+	config->frame_planes.packed;
+
+      config->h264_data.frame_sizes[config->h264_data.output_frames] =
+	frame->linesize[0] * 2;
+
+      ++config->h264_data.output_frames;
+
+      printf("[H264] Decoded frame of size %dx%d\n",
+	     frame->width, frame->height);
     }
     else {
       printf("[H264] Unreachable\n");
@@ -266,3 +307,13 @@ void dump_array(unsigned char *ptr, long size) {
   }
 }
 
+void h264_change_encoder_frame_size(struct h264_config *config,
+				    int width, int height) {
+  config->frame_config.width = width;
+  config->frame_config.height = height;
+
+  config->params.i_width = width;
+  config->params.i_height = height;
+
+  x264_encoder_reconfig(config->encoder, &config->params);
+}

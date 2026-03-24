@@ -32,6 +32,7 @@ struct h264_config {
     long size;
     /* output */
     unsigned char *output[256]; /* individual frames */
+    long int frame_sizes[256];
     long output_frames;
     /* internal */
     x264_nal_t *nals;
@@ -82,6 +83,9 @@ void h264_decode_frame(struct h264_config *config,
 		       long int size);
 
 void h264_decode_flush(struct h264_config *config);
+
+void h264_change_encoder_frame_size(struct h264_config *config,
+				    int _width, int height);
 
 void extract_array(unsigned char *src,
 		   long length,

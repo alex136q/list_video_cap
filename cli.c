@@ -65,6 +65,7 @@ void show_help_text() {
 	   "\n-k <SIZE>\n\tSize of the H.264 packets to be streamed to the graphics thread.\n"
 	   "\n-f <FPS>\n\tLimit rendering frame rate to <FPS>.\n"
 	   "\n-v\n\tEnable debug messages.\n"
+	   "\n-b\n\tEnable H.264 packet byte dumps (implies -v).\n"
 	   "\n-s <width> <height>\n\tVideo capture frame and window size hints for the V4L2 driver.\n"
 	   "\n-R\n\tAllow window to be resized by the user.\n"
 	   "\n-b\n\tShow a border around the video feed.\n"
@@ -125,6 +126,12 @@ void populate_cli_arguments(int argc, char **argv) {
     }
     else if(strcmp(argv[arg], "-v") == 0) {
       debug_cfg.enable_debug_msgs = 1;
+      h264_encoder.debug_info = 1;
+    }
+    else if(strcmp(argv[arg], "-b") == 0) {
+      debug_cfg.enable_debug_msgs = 1;
+      h264_encoder.debug_info = 1;
+      h264_encoder.dump_bytes = 1;
     }
     else if(strcmp(argv[arg], "-f") == 0 && argc > arg) {
       const int freq_hz = atoi(argv[++arg]); /* max. FPS */

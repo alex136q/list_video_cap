@@ -387,14 +387,14 @@ void wait_for_capture(int video_devfd,
   while(1) {
     ++retry_count;
     if(ioctl(video_devfd, VIDIOC_QUERYBUF, buf_s) < 0) {
-      debug_f0("[VIDEO] Could not query the buffer.\n");
+      debug_f0("[CAPTURE] Could not query the buffer.\n");
       close(video_devfd);
       exit(1);
     }
-    debug_f1("[VIDEO] Check #%d\n", retry_count);
+    debug_f1("[CAPTURE] Check #%d\n", retry_count);
     if(dump_info) dump_buffer_metadata(buf_s, buf_data_ptr);
     if((buf_s->flags & (1 << 1)) == 0) {
-      debug_f0("[VIDEO] Buffer ready.\n");
+      debug_f0("[CAPTURE] Buffer ready.\n");
       break;
     }
     sleep_ms(display.other.frame_delay_ms);
@@ -485,6 +485,12 @@ void stream_frames() {
       video_ctl(size_msg);
     }
 
+    if(h264_encoder.frame_config.width != frame_width
+       || h264_encoder.frame_config.height != frame_height) {
+      h264_change_encoder_frame_size(&h264_encoder,
+				     frame_width, frame_height);
+    }
+
     buf_s.index = 0;
     buf_s.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
     buf_s.memory = V4L2_MEMORY_MMAP;
@@ -506,12 +512,12 @@ void stream_frames() {
 					  MAP_SHARED, video_devfd, buf_base);
 
     if((long int)buf_data_ptr <= 0) {
-      debug_f0("Unusable address from mmap.\n");
+      debug_f0("[CAPTURE] Unusable address from mmap.\n");
       close(video_devfd);
       exit(1);
     }
     else if(ioctl(video_devfd, VIDIOC_QBUF, &buf_s) < 0) {
-      debug_f0("Could not enque buffer to the driver.\n");
+      debug_f0("[CAPTURE] Could not enque buffer to the driver.\n");
       munmap(buf_data_ptr, buf_size);
       close(video_devfd);
       exit(1);
@@ -519,11 +525,11 @@ void stream_frames() {
 
     wait_for_capture(video_devfd, &buf_s, buf_data_ptr, 0);
 
-    debug_f0("[VIDEO] Sending frame...\n");
+    debug_f0("[CAPTURE] Sending frame...\n");
     send_frame(buf_data_ptr, buf_s.length);
 
     if(ioctl(video_devfd, VIDIOC_DQBUF, &buf_s) < 0) {
-      debug_f0("Could not deque buffer.\n");
+      debug_f0("[CAPTURE] Could not deque buffer.\n");
       munmap(buf_data_ptr, buf_size);
       close(video_devfd);
       exit(1);
@@ -539,18 +545,27 @@ void stream_frames() {
 void send_frame(unsigned char *ptr, const int length)
 {
   if(display.h264_param.use_h264) {
+    /* send H.264-encoded stream of packets */
     h264_encode_frame(&h264_encoder, ptr);
-    h264_encoder.h264_data.stream = NULL;
-    send_stream(h264_encoder.h264_data.stream,
-		h264_encoder.h264_data.size);
-    if(h264_encoder.h264_data.stream) {
-      free(h264_encoder.h264_data.stream);
+
+    if(h264_encoder.h264_data.size) {
+      send_stream(h264_encoder.h264_data.stream,
+		  h264_encoder.h264_data.size);
+
+      if(h264_encoder.h264_data.stream) {
+	free(h264_encoder.h264_data.stream);
+      }
+    }
+    else {
+      debug_f0("[CAPTURE] No data to send\n");
     }
   }
   else {
     /* send raw YUYV frame data */
     send_video_packet(VIDEO_CMD_FRAME, ptr, length);
   }
+
+  ++display.stat.frames_captured;
 }
 
 void send_video_packet(int type, void *ptr, long int length) {
@@ -564,7 +579,10 @@ void send_video_packet(int type, void *ptr, long int length) {
 }
 
 void send_stream(unsigned char *ptr, const int length) {
+  debug_f1("[CAPTURE] Stream length: %d bytes\n", length);
+
   long int size;
+
   for(long int start = 0; start < length; start += display.h264_param.chunk_size) {
     if(length - start > display.h264_param.chunk_size) {
       size = display.h264_param.chunk_size;
@@ -572,6 +590,12 @@ void send_stream(unsigned char *ptr, const int length) {
     else {
       size = length - start;
     }
+
+    if(h264_encoder.dump_bytes) {
+      debug_f1("[CAPTURE] Video packet: %d bytes\n", size);
+      dump_array(ptr + start, size);
+    }
+
     send_video_packet(VIDEO_CMD_FRAME, ptr + start, size);
   }
 }
