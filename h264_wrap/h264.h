@@ -25,6 +25,7 @@ struct h264_config {
   AVCodecParserContext *parser;
   AVCodecContext *context;
   AVPacket *packet;
+  AVFrame *frame;
 
   struct {
     /* input */
