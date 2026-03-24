@@ -271,7 +271,7 @@ int main(int argc, char **argv) {
   parse_h264_cli_args(argc, argv, &codec);
 
   if(h264_cli_config.test_encoding) {
-    h264_init_encoder(&codec, 1920, 1080);
+    h264_init_encoder(&codec, 1920, 1080, X264_CSP_YUYV);
     parse_h264_cli_args(argc, argv, &codec);
     encode_test_frames(&codec);
     h264_free_encoder(&codec);
