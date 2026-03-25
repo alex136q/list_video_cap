@@ -7,8 +7,14 @@ struct display_config display;
 struct h264_config h264_decoder;
 extern struct h264_config h264_encoder;
 
+
+void decode_h264_data(struct video_msg *cmd);
+
+
 void video_ctl(struct video_msg cmd) {
   debug_f0("[VIDEO] [video_ctl] "); dump_msg_header(&cmd);
+
+  dump_queue_sizes();
 
   struct video_msg msg;
   while(display.queue_w.head != NULL
@@ -19,8 +25,6 @@ void video_ctl(struct video_msg cmd) {
       free(msg.dptr);
     }
   }
-
-  dump_queue_sizes();
 
   if(cmd.oper == VIDEO_CMD_OPEN) {
     debug_f0("[VIDEO] opening window\n");
@@ -51,7 +55,7 @@ void video_ctl(struct video_msg cmd) {
   else if(cmd.oper == VIDEO_CMD_SET_PITCH) {
     display.frame.pitch = cmd.size;
   }
-  else if(cmd.oper == VIDEO_CMD_FRAME) {
+  else if(cmd.oper == VIDEO_CMD_FRAME_YUYV || cmd.oper == VIDEO_CMD_FRAME_H264) {
     if(cli.frame_capture_path != NULL) {
       debug_s1("[VIDEO] Dumping packet into %s\n", cli.frame_capture_path);
       FILE *h264_dump_fd = fopen(cli.frame_capture_path, "a");
@@ -59,65 +63,20 @@ void video_ctl(struct video_msg cmd) {
       fclose(h264_dump_fd);
     }
 
-    if(cmd.size != 0 && cmd.dptr != NULL) {
-      debug_f0("[VIDEO] Got video data "); dump_msg_header(&cmd);
+    struct video_msg msg_copy;
+    msg_copy.oper = cmd->oper;
+    msg_copy.size = cmd->size;
 
-      if(display.h264_param.use_h264) {
-	h264_decoder.h264_data.output_frames = 0;
+    msg_copy.dptr = malloc(cmd->size);
+    memcpy(msg_copy.dptr, cmd->dptr, cmd->size);
+    if(cmd->size) free(cmd->dptr);
 
-	h264_decode_frame(&h264_decoder, cmd.dptr, cmd.size);
+    debug_f0("[VIDEO] cloned as "); dump_msg_header(&msg_copy);
+    debug_f2("[VIDEO] message queued (%d/%d)\n",
+	     queue_length(&display.queue_r),
+	     display.queue_r.max_length);
 
-	long int total_size = 0;
-
-	const int frame_count = h264_decoder.h264_data.output_frames;
-
-	for(int frame = 0; frame < frame_count; ++frame) {
-	  debug_f2("[VIDEO] frame %d/%d\n", frame, frame_count);
-
-	  struct video_msg msg_copy;
-	  msg_copy.oper = cmd.oper;
-
-	  const int frame_size = h264_decoder.h264_data.frame_sizes[frame];
-	  msg_copy.size = frame_size;
-	  total_size += frame_size;
-
-	  msg_copy.dptr = malloc(frame_size);
-	  memcpy(msg_copy.dptr, h264_decoder.h264_data.output[frame], frame_size);
-
-	  debug_f2("[VIDEO] %d/%d cloned as ", (frame + 1), frame_count);
-	  dump_msg_header(&msg_copy);
-	  debug_f2("[VIDEO] Message queued (%d/%d)\n",
-		   queue_length(&display.queue_r),
-		   display.queue_r.max_length);
-
-	  queue_push(&display.queue_r, &msg_copy);
-	}
-
-	debug_f3("[VIDEO] Decoded packet:"
-		 " packed size %d,"
-		 " frame count %d,"
-		 " frame sizes %ld bytes"
-		 "\n",
-		 cmd.size,
-		 frame_count,
-		 total_size);
-      }
-      else {
-	struct video_msg msg_copy;
-	msg_copy.oper = cmd.oper;
-	msg_copy.size = cmd.size;
-
-	msg_copy.dptr = malloc(cmd.size);
-	memcpy(msg_copy.dptr, cmd.dptr, cmd.size);
-
-	debug_f0("[VIDEO] cloned as "); dump_msg_header(&msg_copy);
-	debug_f2("[VIDEO] message queued (%d/%d)\n",
-		 queue_length(&display.queue_r),
-		 display.queue_r.max_length);
-
-	queue_push(&display.queue_r, &msg_copy);
-      }
-    }
+    queue_push(&display.queue_r, &msg_copy);
 
     print_messages(&display.queue_r, "R");
     print_messages(&display.queue_w, "W");
@@ -126,6 +85,8 @@ void video_ctl(struct video_msg cmd) {
     debug_f0("[VIDEO] Quitting\n");
     display.window.open = 0;
     h264_free_decoder(&h264_decoder);
+  }
+  else if(cmd.oper == VIDEO_CMD_FRAME_H264) {
   }
   else {
     debug_f1("[VIDEO] Unknown message type: %d; skipping\n", cmd.oper);
@@ -221,8 +182,17 @@ void set_image(const struct video_msg *msg) {
     return;
   }
 
-  debug_f1("[FRAME] frame: size %d", msg->size);
-  dump_msg_header(msg);
+  if(msg->oper == VIDEO_CMD_FRAME_YUYV) {
+    debug_f1("[FRAME] frame: raw YUYV, size %d", msg->size);
+    dump_msg_header(msg);
+  }
+  else if(msg->oper == VIDEO_CMD_FRAME_H264) {
+    debug_f0("[FRAME] frame: H.264\n");
+    dump_msg_header(msg);
+
+    /* decoded frames will be enqueued */
+    decode_h264_data(msg);
+  }
 
   acquire_lock(&display.frame.lock);
   display.frame.size = msg->size;
@@ -272,7 +242,8 @@ int process_cmd(const struct video_msg *cmd) {
       debug_f0("[RENDER] closing\n");
       return 1;
 
-    case VIDEO_CMD_FRAME:
+    case VIDEO_CMD_FRAME_YUYV:
+    case VIDEO_CMD_FRAME_H264:
       set_image(cmd);
       return 1;
 
@@ -521,19 +492,72 @@ void render_frame() {
 	   display.frame.width, display.frame.height,
 	   display.frame.pitch, display.frame.size);
 
-  unsigned char *grayscale_image = yuyv_to_gray(display.frame.dptr,
-						display.frame.pitch,
-						display.frame.width,
-						display.frame.height);
+  debug_f4("[FRAME] output: %d px by %d px, pitch %d B, size %d B\n",
+	   display.frame.tex_width,
+	   display.frame.tex_height,
+	   display.frame.tex_pitch,
+	   display.frame.tex_size);
+
+  print_messages(&display.queue_r, "R");
+  print_messages(&display.queue_w, "W");
+
+  unsigned char *rgba_image;
+
+  if(display.transform.grayscale) {
+     rgba_image = yuyv_to_gray(display.frame.dptr,
+			       display.frame.pitch,
+			       display.frame.width,
+			       display.frame.height);
+  }
+  else {
+     rgba_image = yuyv_to_rgba(display.frame.dptr,
+			       display.frame.pitch,
+			       display.frame.width,
+			       display.frame.height);
+  }
+
+  rgba_pitch = 4 * display.frame.width;
+
+  if(display.transform.flip_v) {
+    char scanline[rgba_pitch];
+    for(int row = 0; row < display.frame.height >> 1; ++row) {
+      const int head_row_ptr = rgba_pitch * row;
+      const int tail_row_ptr = rgba_pitch * (display.frame.height - 1 - row);
+      memcpy(scanline, rgba_image + head_row_ptr, rgba_pitch);
+      memcpy(rgba_image + head_row_ptr, rgba_image + tail_row_ptr, rgba_pitch);
+      memcpy(rgba_image + tail_row_ptr, scanline, rgba_pitch);
+    }
+  }
+
+  if(display.transform.flip_h) {
+    unsigned int pixel;
+    for(int row = 0; row < display.frame.height; ++row) {
+      for(int col = 0; col < display.frame.width >> 1; ++col) {
+	const head_pixel_ptr = 4 * col;
+	const tail_pixel_ptr = 4 * (display.image.width - 1 - col);
+	pixel = (int*)(rgba_image + head_pixel_ptr);
+	(int*)(rgba_image + head_pixel_ptr) = (int*)(rgba_image + tail_pixel_ptr);
+	(int*)(rgba_image + tail_pixel_ptr) = pixel;
+      }
+    }
+  }
+
+  if(display.transform.complement) {
+  }
+
+  blit_rgba_image(rgba_image);
+  glFlush();
+  glFinish();
+  glfwSwapBuffers(display.window.glfw_id);
 
   /* fill */
   if(display.test.fill_solid)
   for(int k = 0; k < display.frame.tex_size; k += 4) {
     const int pixel = k;
-    grayscale_image[pixel + 0] = 0x00;
-    grayscale_image[pixel + 1] = 0x00;
-    grayscale_image[pixel + 2] = 0x80;
-    grayscale_image[pixel + 3] = 0xFF;
+    rgba_image[pixel + 0] = 0x00;
+    rgba_image[pixel + 1] = 0x00;
+    rgba_image[pixel + 2] = 0x80;
+    rgba_image[pixel + 3] = 0xFF;
   }
 
   /* fill lower half */
@@ -541,10 +565,10 @@ void render_frame() {
   for(int k = display.frame.height / 2; k < display.frame.height; ++k) {
     for(int col = 0; col < display.frame.width; ++col) {
       const int pixel = display.frame.tex_pitch * k + 4 * col;
-      grayscale_image[pixel + 0] = 0x70;
-      grayscale_image[pixel + 1] = 0x50;
-      grayscale_image[pixel + 2] = 0x30;
-      grayscale_image[pixel + 3] = 0xFF;
+      rgba_image[pixel + 0] = 0x70;
+      rgba_image[pixel + 1] = 0x50;
+      rgba_image[pixel + 2] = 0x30;
+      rgba_image[pixel + 3] = 0xFF;
     }
   }
 
@@ -552,10 +576,10 @@ void render_frame() {
   if(display.test.fill_diag)
   for(int k = 0; k < display.frame.tex_width && k < display.frame.tex_height; ++k) {
     const int pixel = 4 * (display.frame.tex_pitch * k + k);
-    grayscale_image[pixel + 0] = 0x00;
-    grayscale_image[pixel + 1] = 0xFF;
-    grayscale_image[pixel + 2] = 0x00;
-    grayscale_image[pixel + 3] = 0xFF;
+    rgba_image[pixel + 0] = 0x00;
+    rgba_image[pixel + 1] = 0xFF;
+    rgba_image[pixel + 2] = 0x00;
+    rgba_image[pixel + 3] = 0xFF;
   }
 
   /* horizontal lines */
@@ -565,15 +589,15 @@ void render_frame() {
     const int row1 = 63;
     int pixel;
     pixel = (display.frame.tex_pitch * row0) + 4 * k;
-    grayscale_image[pixel + 0] = 0xFF;
-    grayscale_image[pixel + 1] = 0xFF;
-    grayscale_image[pixel + 2] = 0xFF;
-    grayscale_image[pixel + 3] = 0xFF;
+    rgba_image[pixel + 0] = 0xFF;
+    rgba_image[pixel + 1] = 0xFF;
+    rgba_image[pixel + 2] = 0xFF;
+    rgba_image[pixel + 3] = 0xFF;
     pixel = (display.frame.tex_pitch * row1) + 4 * k;
-    grayscale_image[pixel + 0] = 0xFF;
-    grayscale_image[pixel + 1] = 0xFF;
-    grayscale_image[pixel + 2] = 0xFF;
-    grayscale_image[pixel + 3] = 0xFF;
+    rgba_image[pixel + 0] = 0xFF;
+    rgba_image[pixel + 1] = 0xFF;
+    rgba_image[pixel + 2] = 0xFF;
+    rgba_image[pixel + 3] = 0xFF;
   }
 
   /* pixels */
@@ -584,29 +608,14 @@ void render_frame() {
   for(int k = 0; k < sizeof(xycs) / sizeof(xycs[0]); k += 4) {
     // printf("Pixel %d %d color %08Xh\n", xycs[k + 0], xycs[k + 1], xycs[k + 2]);
     const int px_ptr = xycs[k + 0] * display.frame.width + xycs[k + 1];
-    ((unsigned int *)grayscale_image)[px_ptr] = xycs[k + 2];
-  }
-
-  debug_f4("[FRAME] output: %d px by %d px, pitch %d B, size %d B\n",
-	   display.frame.tex_width,
-	   display.frame.tex_height,
-	   display.frame.tex_pitch,
-	   display.frame.tex_size);
-
-  print_messages(&display.queue_r, "R");
-  print_messages(&display.queue_w, "W");
-
-  if(grayscale_image) {
-    blit_rgba_image(grayscale_image);
-    glFlush();
-    glFinish();
-    glfwSwapBuffers(display.window.glfw_id);
-
-    free(grayscale_image);
-    grayscale_image = NULL;
+    ((unsigned int *)rgba_image)[px_ptr] = xycs[k + 2];
   }
 
   display.frame.size = 0;
+
+  free(rgba_image);
+  rgba_image = NULL;
+
   release_lock(&display.frame.lock);
 }
 
@@ -837,3 +846,49 @@ void blit_rgba_image(unsigned char *ptr) {
   debug_f0("[GL] end of frame\n");
 }
 
+void decode_h264_data(struct video_msg *cmd) {
+  debug_f0("[VIDEO] Got video data "); dump_msg_header(cmd);
+
+  if(display.h264_param.use_h264) {
+    h264_decoder.h264_data.output_frames = 0;
+
+    h264_decode_frame(&h264_decoder, cmd->dptr, cmd->size);
+
+    long int total_size = 0;
+
+    const int frame_count = h264_decoder.h264_data.output_frames;
+
+    for(int frame = 0; frame < frame_count; ++frame) {
+      debug_f2("[VIDEO] frame %d/%d\n", frame, frame_count);
+
+      struct video_msg msg_copy;
+      msg_copy.oper = cmd->oper;
+
+      const int frame_size = h264_decoder.h264_data.frame_sizes[frame];
+      msg_copy.size = frame_size;
+      total_size += frame_size;
+
+      msg_copy.dptr = malloc(frame_size);
+      memcpy(msg_copy.dptr, h264_decoder.h264_data.output[frame], frame_size);
+      free(h264_decoder.h264_data.output[frame]);
+      h264_decoder.h264_data.output[frame] = 0;
+
+      debug_f2("[VIDEO] %d/%d cloned as ", (frame + 1), frame_count);
+      dump_msg_header(&msg_copy);
+      debug_f2("[VIDEO] Message queued (%d/%d)\n",
+	       queue_length(&display.queue_r),
+	       display.queue_r.max_length);
+
+      queue_push(&display.queue_r, &msg_copy);
+    }
+
+    debug_f3("[VIDEO] Decoded packet:"
+	     " packed size %d,"
+	     " frame count %d,"
+	     " frame sizes %ld bytes"
+	     "\n",
+	     cmd->size,
+	     frame_count,
+	     total_size);
+  }
+}

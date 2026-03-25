@@ -63,24 +63,27 @@ void debug_f0(const char *template) {
   memset(debug_msg.dptr, 0, debug_buffer_size);
   snprintf((char *)debug_msg.dptr, debug_buffer_size - 1, template);
   debug_msg.size = strlen(debug_msg.dptr);
-  acquire_lock(&debug_cfg.debug_lock);
   if(debug_cfg.show_memory_dump) {
     dump_msg(&debug_msg);
   }
   printf(debug_msg.dptr);
   free(debug_msg.dptr);
-  release_lock(&debug_cfg.debug_lock);
 }
 
 void dump_msg(const struct video_msg *msg) {
   if(!debug_cfg.enable_debug_msgs) return;
-  printf("[DEBUG] cmd(%08Xh %08Xh %016lXh)\n",
-	 msg->oper, msg->size, (const long int)msg->dptr);
+
+  acquire_lock(&debug_cfg.debug_lock);
+
+  printf(" [DEBUG] cmd(%d, %08X, %016lX)\n",
+	 msg->oper, msg->size, (long int) msg->dptr);
+
   printf("    ");
   for(int b = 0; b < bytes_per_mem_dump_line; ++b) {
     printf(" %02X", b);
   }
   printf("\n");
+
   for(int ptr = 0; ptr < 0x1000 && ptr < msg->size;
       ptr += bytes_per_mem_dump_line) {
     printf("%04X", ptr);
@@ -92,6 +95,8 @@ void dump_msg(const struct video_msg *msg) {
       }
     printf("\n");
   }
+
+  release_lock(&debug_cfg.debug_lock);
 }
 
 void dump_msg_header(const struct video_msg *msg) {
@@ -102,7 +107,9 @@ void dump_msg_header(const struct video_msg *msg) {
 
 void dump_msg_headers(const struct queue *stk) {
   if(!debug_cfg.enable_debug_msgs) return;
+  acquire_lock(&debug_cfg.debug_lock);
   queue_foreach(stk, dump_msg_header);
+  release_lock(&debug_cfg.debug_lock);
 }
 
 void dump_queue_sizes() {

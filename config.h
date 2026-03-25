@@ -67,6 +67,13 @@ struct display_config {
     int fill_diag;
     int fill_horiz;
   } test;
+
+  struct {
+    int grayscale;
+    int flip_v;
+    int flip_h;
+    int complement;
+  } transform;
 };
 
 #endif

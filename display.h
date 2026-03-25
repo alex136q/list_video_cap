@@ -10,11 +10,12 @@ enum CMD {
   VIDEO_CMD_OPEN = 1,
   VIDEO_CMD_SET_WIDTH = 2,
   VIDEO_CMD_SET_PITCH = 3,
-  VIDEO_CMD_FRAME = 4,
+  VIDEO_CMD_FRAME_YUYV = 4,
   VIDEO_CMD_SET_HEIGHT = 5,
   VIDEO_CMD_SET_ARGC = 6,
   VIDEO_CMD_SET_ARGV = 7,
   VIDEO_CMD_WRITE = 8,
+  VIDEO_CMD_FRAME_H264 = 9,
 };
 
 void video_ctl(struct video_msg cmd);

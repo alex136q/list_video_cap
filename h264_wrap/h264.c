@@ -135,13 +135,13 @@ void h264_encode_frame(struct h264_config *config,
     if(config->debug_info) {
       printf("[H264] [ENC] plane 0 stride %d ptr %016lXh\n",
 	     config->frame_config.luma_length,
-	     (long int)config->frame_planes.yvec);
+	     (long int)config->input_frame.img.plane[0]);
       printf("[H264] [ENC] plane 1 stride %d ptr %016lXh\n",
 	     config->frame_config.chroma_b_length,
-	     (long int)config->frame_planes.yvec);
+	     (long int)config->input_frame.img.plane[1]);
       printf("[H264] [ENC] plane 2 stride %d ptr %016lXh\n",
 	     config->frame_config.chroma_r_length,
-	     (long int)config->frame_planes.yvec);   
+	     (long int)config->input_frame.img.plane[2]);
     }
   }
   else {
@@ -215,11 +215,14 @@ void h264_decode_frame(struct h264_config *config,
   int size_remaining = size;
   int count;
 
-  if(config->debug_info) printf("[H264] [DEC] Frame decoding: got chunk of size %d\n", size);
+  if(config->debug_info) {
+    printf("[H264] [DEC] Frame decoding: got chunk of size %d\n", size);
+  }
 
   while(size_remaining > 0) {
-    if(config->debug_info) printf("[H264] [DEC] Position %d/%d in chunk\n", ptr, size
-				  );
+    if(config->debug_info) {
+      printf("[H264] [DEC] Position %d/%d in chunk\n", ptr, size);
+    }
 
     count = av_parser_parse2(config->parser, config->context,
 			     &config->packet->data, &config->packet->size,
@@ -227,11 +230,6 @@ void h264_decode_frame(struct h264_config *config,
 			     AV_NOPTS_VALUE, AV_NOPTS_VALUE, 0);
 
     if(count > 0) {
-      if(config->dump_bytes) {
-	if(config->debug_info) printf("[H264] [DEC] Packet: size %d\n", count);
-	dump_array(data + ptr, count);
-      }
-
       ptr += count;
       size_remaining -= count;
 
