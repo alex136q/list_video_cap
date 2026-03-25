@@ -84,6 +84,13 @@ Run `./list_video_cap help` for a summary of the supported commands and their ar
 		    -F diag		Fill main diagonal.
 		    -F horiz	Fill two lines.
 
+    -T <type>
+	    Apply transforms to the frames to be rendered:
+		    -T flip_v		Flip along the vertical axis (up/down).
+		    -T flip_h		Flip along the horizontal axis (left/right).
+		    -T gray	Convert to grayscale (skip YUV to RGBA conversion).
+		    -T invert		Negate RGB color.
+
 Other files
 -----------
 
