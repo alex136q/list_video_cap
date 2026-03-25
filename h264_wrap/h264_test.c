@@ -1,22 +1,5 @@
 #include "h264.h"
 
-
-unsigned char sinusoid(unsigned char bias,
-		       unsigned char amplitude,
-		       float time,
-		       float period,
-		       float phase);
-
-unsigned char *solid_frame(int width, int height, long *size, float t);
-
-void save_array(const unsigned char *raw_yuyv,
-		long size,
-		const char *filename_yuyv);
-
-void export_luma_as_png(int width, int height,
-			const char *filename_yuyv,
-			const char *filename_png);
-
 struct {
   int export_images;
   int frame_count;
@@ -25,6 +8,23 @@ struct {
   char *out_stream_path;
   char *in_stream_path;
 } h264_cli_config;
+
+
+unsigned char sinusoid(unsigned char bias,
+		       unsigned char amplitude,
+		       float time,
+		       float period,
+		       float phase);
+
+unsigned char *solid_frame(int width, int height, long int *size, float t);
+
+void save_array(const unsigned char *raw_yuyv,
+		long size,
+		const char *filename_yuyv);
+
+void export_luma_as_png(int width, int height,
+			const char *filename_yuyv,
+			const char *filename_png);
 
 
 void parse_h264_cli_args(int argc, char **argv,
@@ -48,13 +48,17 @@ void encode_test_frames(struct h264_config *config) {
   config->frame_config.frame_index = 0;
 
   h264_get_headers(config);
-  printf("H.264 headers: %d NALs\n", config->h264_data.nal_count);
+  if(config->debug_info) {
+    printf("H.264 headers: %d NALs\n", config->h264_data.nal_count);
+  }
 
   long packed_size_sum = 0;
 
   for(int k = 0; k < config->h264_data.nal_count; ++k) {
-    printf("H.264 headers: NAL %d: size %d\n",
-	   k, config->h264_data.nals[k].i_payload);
+    if(config->debug_info) {
+      printf("H.264 headers: NAL %d: size %d\n",
+	     k, config->h264_data.nals[k].i_payload);
+    }
 
     dump_array(config->h264_data.nals[k].p_payload,
 	       config->h264_data.nals[k].i_payload);
@@ -76,23 +80,32 @@ void encode_test_frames(struct h264_config *config) {
 
     h264_encode_frame(config, raw_yuyv);
 
-    printf("Frame %d: %d NALs\n", frame, config->h264_data.nal_count);
+    free(raw_yuyv);
+
+    if(config->debug_info) {
+      printf("Frame %d: %d NALs\n", frame, config->h264_data.nal_count);
+    }
 
     long nals_size = 0;
 
     for(int k = 0; k < config->h264_data.nal_count; ++k) {
       int size = config->h264_data.nals[k].i_payload;
       nals_size += size;
-      fwrite(config->h264_data.nals[k].p_payload,
-	     config->h264_data.nals[k].i_payload, 1, nal_out);
-      printf("\tNAL %d size %d bytes\n", k, size);
+      fwrite(config->h264_data.nals[k].p_payload, 1,
+	     config->h264_data.nals[k].i_payload, nal_out);
+      if(config->debug_info) {
+	printf("\tNAL %d size %d bytes\n", k, size);
+      }
     }
 
-    printf("Frame %d: NAL total size %ld = %ld bytes\n",
-	   frame, config->h264_data.size, nals_size);
+    if(config->debug_info) {
+      printf("Frame %d: NAL total size %ld = %ld bytes\n",
+	     frame, config->h264_data.size, nals_size);
 
-    printf("Frame %d/%d: size %ld bytes, streamed size %ld bytes\n",
-	   frame, h264_cli_config.frame_count, config->frame_config.size, nals_size);
+      printf("Frame %d/%d: size %ld bytes, streamed size %ld bytes\n",
+	     frame, h264_cli_config.frame_count, config->frame_config.size, nals_size);
+    }
+
     packed_size_sum += nals_size;
 
     if(h264_cli_config.export_images) {
@@ -106,8 +119,6 @@ void encode_test_frames(struct h264_config *config) {
       export_luma_as_png(config->frame_config.width, config->frame_config.height,
 			 filename_yuyv, filename_png);
     }
-
-    free(raw_yuyv);
   }
 
   fclose(nal_out);
@@ -125,13 +136,13 @@ void encode_test_frames(struct h264_config *config) {
 	 ((float)(100.0 * packed_size_sum) / yuyv_size_sum));
 }
 
-unsigned char *solid_frame(int width, int height, long *size, float t) {
+unsigned char *solid_frame(int width, int height, long int *size, float t) {
   *size = width * height * 2;
   unsigned char *data = malloc(*size);
 
-  const unsigned char Y_ = sinusoid(0x7F, 0x7F, t, 16.0f, 0.000f);
-  const unsigned char Cb = sinusoid(0x7F, 0x7F, t, 12.0f, 0.369f);
-  const unsigned char Cr = sinusoid(0x7F, 0x7F, t,  7.0f, 0.417f);
+  const unsigned char Y_ = sinusoid(0x7F, 0x7F, t, 3.0f, 0.000f);
+  const unsigned char Cb = sinusoid(0x7F, 0x7F, t, 2.0f, 0.369f);
+  const unsigned char Cr = sinusoid(0x7F, 0x7F, t, 5.0f, 0.417f);
 
   for(int ptr = 0; ptr < *size; ptr += 4) {
     data[ptr + 0] = Y_;
@@ -186,7 +197,9 @@ void parse_h264_cli_args(int argc, char **argv,
 
   config->frame_config.width = 1920;
   config->frame_config.height = 1080;
+  config->frame_config.colorspace = X264_CSP_YUYV;
 
+  config->debug_info = 0;
   config->dump_bytes = 0;
 
   for(int arg = 1; arg < argc; ++arg) {
@@ -216,10 +229,14 @@ void parse_h264_cli_args(int argc, char **argv,
       h264_cli_config.in_stream_path = argv[++arg];
     }
     else if(strcmp(argv[arg], "-b") == 0) {
+      config->debug_info = 1;
       config->dump_bytes = 1;
     }
     else if(strcmp(argv[arg], "-v") == 0) {
       config->debug_info = 1;
+    }
+    else if(strcmp(argv[arg], "-j") == 0) {
+      config->frame_config.colorspace = X264_CSP_I422;
     }
     else {
       printf("Unknown flag or argument: %s\n", argv[arg]);
@@ -238,6 +255,7 @@ void display_h264_cli_help() {
 	 "-n <count>\n\tSet frame count.\n\n"
 	 "-w <width>\n\tSet frame width.\n\n"
 	 "-h <height>\n\tSet frame height.\n\n"
+	 "-j\n\tUse encoding YUV 4:2:2 planar. Default is YUV 4:2:2 packed.\n\n"
 	 "-b\n\tDump decoded byte packets.\n\n"
 	 "-v\n\tVerbose debugging messages.\n\n"
 	 "");
@@ -253,11 +271,30 @@ void decode_test_frames(struct h264_config *config) {
   int buffer_size = 1024;
   char buffer[buffer_size];
   int length;
+
+  config->h264_data.output_frames = 0;
+
   while(1) {
     length = fread(buffer, 1, buffer_size, stream_fd);
     if(length != 0) {
-      printf("[H264] Chunk: offset %08lX, size %08X\n", ftell(stream_fd), length);
+      if(config->debug_info) {
+	printf("[H264] Chunk: offset %08lXh, size %08Xh\n", ftell(stream_fd), length);
+      }
+
       h264_decode_frame(config, buffer, length);
+
+      for(int k = 0; k < config->h264_data.output_frames; ++k) {
+	if(config->h264_data.output[k]) {
+	  if(config->debug_info) {
+	    printf("[H264] Frame %d/%d size %d bytes ptr %016lXh\n",
+		   (k + 1),
+		   config->h264_data.output_frames,
+		   config->h264_data.frame_sizes[k],
+		   config->h264_data.output[k]);
+	  }
+	  free(config->h264_data.output[k]);
+	}
+      }
     }
     else {
       break;
@@ -271,7 +308,10 @@ int main(int argc, char **argv) {
   parse_h264_cli_args(argc, argv, &codec);
 
   if(h264_cli_config.test_encoding) {
-    h264_init_encoder(&codec, 1920, 1080, X264_CSP_YUYV);
+    h264_init_encoder(&codec,
+		      codec.frame_config.width,
+		      codec.frame_config.height,
+		      codec.frame_config.colorspace);
     parse_h264_cli_args(argc, argv, &codec);
     encode_test_frames(&codec);
     h264_free_encoder(&codec);

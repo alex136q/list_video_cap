@@ -52,8 +52,6 @@ void video_ctl(struct video_msg cmd) {
     display.frame.pitch = cmd.size;
   }
   else if(cmd.oper == VIDEO_CMD_FRAME) {
-    debug_f0("[VIDEO] Cloning "); dump_msg_header(&cmd);
-
     if(cli.frame_capture_path != NULL) {
       debug_s1("[VIDEO] Dumping packet into %s\n", cli.frame_capture_path);
       FILE *h264_dump_fd = fopen(cli.frame_capture_path, "a");
@@ -62,20 +60,20 @@ void video_ctl(struct video_msg cmd) {
     }
 
     if(cmd.size != 0 && cmd.dptr != NULL) {
+      debug_f0("[VIDEO] Got video data "); dump_msg_header(&cmd);
 
       if(display.h264_param.use_h264) {
-	unsigned char *data = malloc(cmd.size + 0x400);
-	memcpy(data, cmd.dptr, cmd.size);
+	h264_decoder.h264_data.output_frames = 0;
 
-	h264_decode_frame(&h264_decoder, data, cmd.size);
-
-	free(data);
+	h264_decode_frame(&h264_decoder, cmd.dptr, cmd.size);
 
 	long int total_size = 0;
 
 	const int frame_count = h264_decoder.h264_data.output_frames;
 
 	for(int frame = 0; frame < frame_count; ++frame) {
+	  debug_f2("[VIDEO] frame %d/%d\n", frame, frame_count);
+
 	  struct video_msg msg_copy;
 	  msg_copy.oper = cmd.oper;
 
@@ -493,15 +491,21 @@ void resize_fb() {
 
 
 void render_frame() {
+  glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
+  glClear(GL_COLOR_BUFFER_BIT);
+
   if(!display.frame.size) {
     debug_f0("[FRAME] empty frame, skipping\n");
-    debug_f2("[FRAME] window  size: %dx%d\n",
+    debug_f2("[FRAME] window    size: %dx%d\n",
 	     display.window.width, display.window.height);
-    debug_f2("[FRAME] frame   size: %dx%d\n",
+    debug_f2("[FRAME] frame     size: %dx%d\n",
 	     display.frame.width, display.frame.height);
-    debug_f2("[FRAME] enc. f. size: %dx%d\n",
+    debug_f2("[FRAME] param. f. size: %dx%d\n",
 	     h264_encoder.frame_config.width,
 	     h264_encoder.frame_config.height);
+    debug_f2("[FRAME] enc.   f. size: %dx%d\n",
+	     h264_encoder.params.i_width,
+	     h264_encoder.params.i_height);
     return;
   }
 
@@ -618,9 +622,6 @@ void blit_rgba_image(unsigned char *ptr) {
 	     display.frame.tex_pitch,
 	     display.frame.tex_size);
   }
-
-  glClearColor(0.2f, 0.2f, 0.2f, 1.0f);
-  glClear(GL_COLOR_BUFFER_BIT);
 
   static const char *vs_src =
     "#version 460 core\n"

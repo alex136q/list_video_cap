@@ -19,6 +19,8 @@ struct h264_config {
   /* internal, libx264 */
   x264_t *encoder;
   x264_param_t params;
+  x264_picture_t dummy_frame;
+  x264_picture_t input_frame;
 
   /* internal, libavcodec */
   AVCodec *codec;
@@ -46,9 +48,10 @@ struct h264_config {
     int width;
     int height;
     int colorspace;
-    long size; /* computed (output) */
-    /* internal */
+    /* output */
+    long int size;
     int scanline_length;
+    /* internal */
     int luma_length;
     int chroma_b_length;
     int chroma_r_length;
@@ -92,10 +95,11 @@ void h264_change_encoder_frame_size(struct h264_config *config,
 				    int _width, int height);
 
 void extract_array(unsigned char *src,
-		   long length,
+		   long int length,
 		   int offset,
 		   int stride,
-		   unsigned char **dst);
+		   long int alloc_size,
+		   unsigned char *dst);
 
 void dump_array(unsigned char *ptr, long size);
 

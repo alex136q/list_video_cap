@@ -10,13 +10,14 @@ void h264_resize_encoder_frame_internal(struct h264_config *config,
 
 
 void extract_array(unsigned char *src,
-		   long length,
+		   long int length,
 		   int offset,
 		   int stride,
-		   unsigned char **dst){
-  *dst = malloc(length / stride + buffer_extra_padding);
+		   long int alloc_size,
+		   unsigned char *dst){
+
   for(int ptr = offset, out_ptr = 0; ptr < length; ptr += stride, ++out_ptr) {
-    (*dst)[out_ptr] = src[ptr];
+    dst[out_ptr] = src[ptr];
   }
 }
 
@@ -28,7 +29,7 @@ void h264_init_encoder(struct h264_config *config,
   x264_param_default(&config->params);
 
   /* frame settings (libx264) */
-  config->params.i_threads = 0;
+  config->params.i_threads = 1;
   config->params.i_csp = config->frame_config.colorspace = colorspace;
   config->params.i_bitdepth = 8;
   config->params.i_level_idc = 9;
@@ -53,6 +54,17 @@ void h264_init_encoder(struct h264_config *config,
   config->params.analyse.b_ssim = 0;
 
   config->encoder = x264_encoder_open(&config->params);
+
+  x264_picture_alloc(&config->input_frame,
+		     config->frame_config.colorspace,
+		     config->frame_config.width,
+		     config->frame_config.height);
+
+  /* required parameter for x264_encoder_encode */
+  x264_picture_alloc(&config->dummy_frame,
+		     config->frame_config.colorspace,
+		     config->frame_config.width,
+		     config->frame_config.height);
 }
 
 void h264_free_encoder(struct h264_config *config) {
@@ -69,7 +81,9 @@ void h264_get_headers(struct h264_config *config) {
 void h264_encode_frame(struct h264_config *config,
 		       unsigned char *data) {
 
-  config->frame_config.size = (2 * (long)config->frame_config.width
+  /* input frames have no padding bytes at the end of scanlines */
+  config->frame_config.size = (2
+			       * (long)config->frame_config.width
 			       * (long)config->frame_config.height);
 
   if(config->debug_info) {
@@ -80,25 +94,18 @@ void h264_encode_frame(struct h264_config *config,
 	   config->frame_config.size);
   }
 
-  /* required parameter for x264_encoder_encode */
-  x264_picture_t output_frame;
-  x264_picture_alloc(&output_frame,
-		     config->frame_config.colorspace,
-		     config->frame_config.width,
-		     config->frame_config.height);
-
-  x264_picture_t input_frame;
-  x264_picture_alloc(&input_frame,
-		     config->frame_config.colorspace,
-		     config->frame_config.width,
-		     config->frame_config.height);
+  if(config->debug_info)
+  printf("[H264] [ENC] Input frame size %dx%d pitch %d size %ld\n",
+	 config->frame_config.width, config->frame_config.height,
+	 config->frame_config.scanline_length, config->frame_config.size);
 
   if(config->frame_config.colorspace == X264_CSP_YUYV) {
     /* YUV 4:2:2 packed is same as capture format */
 
-    input_frame.img.i_plane = 1;
-    input_frame.img.i_stride[0] = config->frame_config.scanline_length;
-    input_frame.img.plane[0] = data;
+    config->input_frame.img.i_plane = 1;
+    config->input_frame.img.i_stride[0] = config->frame_config.scanline_length;
+
+    memcpy(config->input_frame.img.plane[0], data, config->frame_config.size);
 
     if(config->debug_info)
     printf("[H264] [ENC] plane 0 stride %d ptr %016lXh\n",
@@ -107,46 +114,49 @@ void h264_encode_frame(struct h264_config *config,
   else if(config->frame_config.colorspace == X264_CSP_I422) {
     /* YUV 4:2:2 planar needs deinterlacing */
 
-    extract_array(data, config->frame_config.size,
-		  0, 2, &config->frame_planes.yvec);
-    extract_array(data, config->frame_config.size,
-		  1, 4, &config->frame_planes.cbvec);
-    extract_array(data, config->frame_config.size,
-		  3, 4, &config->frame_planes.crvec);
+    extract_array(data, config->frame_config.size, 0, 2,
+		  config->frame_config.luma_length * config->frame_config.height,
+		  config->input_frame.img.plane[0]);
 
-    input_frame.img.i_plane = 3;
+    extract_array(data, config->frame_config.size, 1, 4,
+		  config->frame_config.chroma_b_length * config->frame_config.height,
+		  config->input_frame.img.plane[1]);
 
-    input_frame.img.i_stride[0] = config->frame_config.luma_length;
-    input_frame.img.i_stride[1] = config->frame_config.chroma_b_length;
-    input_frame.img.i_stride[2] = config->frame_config.chroma_r_length;
+    extract_array(data, config->frame_config.size, 3, 4,
+		  config->frame_config.chroma_r_length * config->frame_config.height,
+		  config->input_frame.img.plane[2]);
 
-    input_frame.img.plane[0] = config->frame_planes.yvec;
-    input_frame.img.plane[1] = config->frame_planes.cbvec;
-    input_frame.img.plane[2] = config->frame_planes.crvec;
+    config->input_frame.img.i_plane = 3;
 
-    printf("[H264] [ENC] plane 0 stride %d ptr %016lXh\n",
-	   config->frame_config.luma_length,
-	   (long int)config->frame_planes.yvec);
-    printf("[H264] [ENC] plane 1 stride %d ptr %016lXh\n",
-	   config->frame_config.chroma_b_length,
-	   (long int)config->frame_planes.yvec);
-    printf("[H264] [ENC] plane 2 stride %d ptr %016lXh\n",
-	   config->frame_config.chroma_r_length,
-	   (long int)config->frame_planes.yvec);
+    config->input_frame.img.i_stride[0] = config->frame_config.luma_length;
+    config->input_frame.img.i_stride[1] = config->frame_config.chroma_b_length;
+    config->input_frame.img.i_stride[2] = config->frame_config.chroma_r_length;
+
+    if(config->debug_info) {
+      printf("[H264] [ENC] plane 0 stride %d ptr %016lXh\n",
+	     config->frame_config.luma_length,
+	     (long int)config->frame_planes.yvec);
+      printf("[H264] [ENC] plane 1 stride %d ptr %016lXh\n",
+	     config->frame_config.chroma_b_length,
+	     (long int)config->frame_planes.yvec);
+      printf("[H264] [ENC] plane 2 stride %d ptr %016lXh\n",
+	     config->frame_config.chroma_r_length,
+	     (long int)config->frame_planes.yvec);   
+    }
   }
   else {
     printf("[H264] [ENC] Unsupported colorspace for libx264 wrapper: %d\n",
-	   input_frame.img.i_csp);
+	   config->input_frame.img.i_csp);
     exit(1);
   }
 
-  input_frame.i_pts = ++config->frame_config.frame_index;
+  config->input_frame.i_pts = ++config->frame_config.frame_index;
 
   x264_encoder_encode(config->encoder,
 		      &config->h264_data.nals,
 		      &config->h264_data.nal_count,
-		      &input_frame,
-		      &output_frame);
+		      &config->input_frame,
+		      &config->dummy_frame);
 
   long nals_size = 0;
   for(int k = 0; k < config->h264_data.nal_count; ++k) {
@@ -168,6 +178,7 @@ void h264_encode_frame(struct h264_config *config,
     memcpy(config->h264_data.stream + ptr,
 	   config->h264_data.nals[k].p_payload,
 	   config->h264_data.nals[k].i_payload);
+
     ptr += config->h264_data.nals[k].i_payload;
   }
 }
@@ -186,6 +197,7 @@ void h264_free_decoder(struct h264_config *config) {
   av_parser_close(config->parser);
   avcodec_free_context(&config->context);
   av_packet_free(&config->packet);
+  av_frame_free(&config->frame);
 }
 
 void h264_decode_frame(struct h264_config *config,
@@ -194,6 +206,7 @@ void h264_decode_frame(struct h264_config *config,
 
   const int buffer_size = 4096;
   char buffer[buffer_size + AV_INPUT_BUFFER_PADDING_SIZE];
+  memset(buffer, 0, sizeof(buffer_size));
 
   config->h264_data.output_frames = 0;
   config->h264_data.size = 0;
@@ -205,7 +218,8 @@ void h264_decode_frame(struct h264_config *config,
   if(config->debug_info) printf("[H264] [DEC] Frame decoding: got chunk of size %d\n", size);
 
   while(size_remaining > 0) {
-    if(config->debug_info) printf("[H264] [DEC] Position %d/%d in chunk\n", ptr, size);
+    if(config->debug_info) printf("[H264] [DEC] Position %d/%d in chunk\n", ptr, size
+				  );
 
     count = av_parser_parse2(config->parser, config->context,
 			     &config->packet->data, &config->packet->size,
@@ -222,12 +236,12 @@ void h264_decode_frame(struct h264_config *config,
       size_remaining -= count;
 
       if(config->packet->size > 0) {
-	if(config->debug_info) printf("[H264] [DEC] Decoding packet %d\n", count);
+	if(config->debug_info) printf("[H264] [DEC] Decoding packet of size %d\n", count);
 	avcodec_send_packet(config->context, config->packet);
 	h264_decode_frame_internal(config);
       }
       else {
-	if(config->debug_info) printf("[H264] [DEC] No packet\n");
+	if(config->debug_info) printf("[H264] [DEC] No packet in chunk of size %d\n", count);
       }
     }
     else if(count < 0) {
@@ -259,10 +273,11 @@ void h264_decode_frame_internal(struct h264_config *config) {
 
     config->frame_config.width  = config->frame->width;
     config->frame_config.height = config->frame->height;
+    /* wrapper adds no padding bytes at the end of scanlines */
     config->frame_config.size   = config->frame->width * config->frame->height * 2;
 
     config->frame_config.scanline_length = config->frame->width << 1;
-    config->frame_config.luma_length = config->frame->width;
+    config->frame_config.luma_length     = config->frame->width;
     config->frame_config.chroma_b_length = config->frame->width >> 1;
     config->frame_config.chroma_r_length = config->frame->width >> 1;
 
@@ -281,12 +296,9 @@ void h264_decode_frame_internal(struct h264_config *config) {
       exit(1);
     }
 
-    config->frame_config.width = config->frame->width;
-    config->frame_config.height = config->frame->height;
-    config->frame_config.size = config->frame->height * config->frame->width * 2;
-
     if(config->debug_info) {
       for(int k = 0; k < AV_NUM_DATA_POINTERS; ++k) {
+	if(config->debug_info)
 	printf("[H264] [DEC] Frame: plane %02Xh size %08Xh ptr %016lXh\n",
 	       k, config->frame->linesize[k], (long int)config->frame->data[k]);
       }
@@ -308,7 +320,7 @@ void h264_decode_frame_internal(struct h264_config *config) {
 	config->frame_planes.packed;
 
       config->h264_data.frame_sizes[config->h264_data.output_frames] =
-	config->frame->linesize[0];
+	config->frame->linesize[0] * 2 * config->frame->height;
 
       ++config->h264_data.output_frames;
 
@@ -350,7 +362,7 @@ void h264_decode_frame_internal(struct h264_config *config) {
 	config->frame_planes.packed;
 
       config->h264_data.frame_sizes[config->h264_data.output_frames] =
-	config->frame->linesize[0] * config->frame->height;
+	config->frame->linesize[0] * 2 * config->frame->height;
 
       ++config->h264_data.output_frames;
 

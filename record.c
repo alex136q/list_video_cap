@@ -489,7 +489,10 @@ void stream_frames() {
     }
 
     if(frame_width > 0 && frame_height > 0
-       && display.h264_param.use_h264) {
+       && display.h264_param.use_h264
+       && h264_encoder.frame
+       && (h264_encoder.frame->width != frame_width
+	   || h264_encoder.frame->height != frame_height)) {
       h264_change_encoder_frame_size(&h264_encoder,
 				     frame_width, frame_height);
     }
@@ -528,8 +531,12 @@ void stream_frames() {
 
     wait_for_capture(video_devfd, &buf_s, buf_data_ptr, 0);
 
-    debug_f0("[CAPTURE] Sending frame...\n");
-    send_frame(buf_data_ptr, buf_s.length);
+    if(buf_s.length) {
+      debug_f0("[CAPTURE] Sending frame...\n");
+      unsigned char *data_ptr = malloc(buf_s.length);
+      memcpy(data_ptr, buf_data_ptr, buf_s.length);
+      send_frame(data_ptr, buf_s.length);
+    }
 
     if(ioctl(video_devfd, VIDIOC_DQBUF, &buf_s) < 0) {
       debug_f0("[CAPTURE] Could not deque buffer.\n");
@@ -559,8 +566,14 @@ void send_frame(unsigned char *ptr, const int length)
     h264_encode_frame(&h264_encoder, ptr);
 
     if(h264_encoder.h264_data.size) {
+      debug_f2("[CAPTURE] NALs of size %08Xh at ptr %016lX\n",
+	       h264_encoder.h264_data.size,
+	       (long int)h264_encoder.h264_data.stream);
+
       send_stream(h264_encoder.h264_data.stream,
 		  h264_encoder.h264_data.size);
+
+      free(ptr);
 
       if(h264_encoder.h264_data.stream) {
 	free(h264_encoder.h264_data.stream);
