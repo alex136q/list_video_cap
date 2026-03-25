@@ -78,7 +78,12 @@ void show_help_text() {
 	   "\t\t-F half\t\tFill lower half of frame.\n"
 	   "\t\t-F pixel\tColor top left pixel.\n"
 	   "\t\t-F diag\t\tFill main diagonal.\n"
-	   "\t\t-F horiz\tFill two lines.\n");
+	   "\t\t-F horiz\tFill two lines.\n"
+	   "\n-T <type>\n\tApply transforms to the frames to be rendered:\n"
+	   "\t\t-T flip_v\t\tFlip along the vertical axis (up/down).\n"
+	   "\t\t-T flip_h\t\tFlip along the horizontal axis (left/right).\n"
+	   "\t\t-T gray\tConvert to grayscale (skip YUV to RGBA conversion).\n"
+	   "\t\t-T invert\t\tNegate RGB color.\n");
 }
 
 void populate_cli_arguments(int argc, char **argv) {
@@ -113,6 +118,11 @@ void populate_cli_arguments(int argc, char **argv) {
   display.h264_param.use_h264 = 1;
   display.h264_param.chunk_size = 1024;
   display.h264_param.colorspace = X264_CSP_YUYV;
+
+  display.transform.grayscale = 0;
+  display.transform.flip_h = 0;
+  display.transform.flip_v = 0;
+  display.transform.complement = 0;
 
   for(int arg = 2; arg < argc; ++arg) {
     if(strcmp(argv[arg], "-d") == 0) {
@@ -187,6 +197,13 @@ void populate_cli_arguments(int argc, char **argv) {
     }
     else if(strcmp(argv[arg], "-j") == 0) {
       display.h264_param.colorspace = X264_CSP_I422;
+    }
+    else if(strcmp(argv[arg], "-T") == 0 && argc > arg) {
+      ++arg;
+      if(strcmp(argv[arg], "gray") == 0) display.transform.grayscale = 1;
+      if(strcmp(argv[arg], "flip_v") == 0) display.transform.flip_v ^= 1;
+      if(strcmp(argv[arg], "flip_h") == 0) display.transform.flip_h ^= 1;
+      if(strcmp(argv[arg], "invert") == 0) display.transform.complement ^= 1;
     }
     else {
       show_cli_error_text(arg);

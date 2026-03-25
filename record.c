@@ -602,50 +602,7 @@ void send_video_packet(int type, void *ptr, long int length) {
 }
 
 void send_stream(unsigned char *ptr, const int length) {
-  static unsigned char buffer[4096];
-  static int buf_ptr = 0;
-
-  debug_f1("[CAPTURE] Stream length: %d bytes\n", length);
-
-  long int size;
-
-  for(long int start = 0; start < length;) {
-    if(length - start > display.h264_param.chunk_size) {
-      size = display.h264_param.chunk_size;
-    }
-    else {
-      size = length - start;
-    }
-
-    if(h264_encoder.dump_bytes) {
-      debug_f1("[CAPTURE] Video packet: %d bytes\n", size);
-      dump_array(ptr + start, size);
-    }
-
-    if(buf_ptr + size < sizeof(buffer)) {
-      debug_f2("[CAPTURE] Storing chunk in buffer (used %d/%d bytes)\n",
-	       buf_ptr + size, sizeof(buffer));
-      memcpy(buffer + buf_ptr, ptr, size);
-      buf_ptr += size;
-    }
-    else if(buf_ptr > 0) {
-      debug_f2("[CAPTURE] Sending buffer (used %d/%d bytes)\n",
-	       buf_ptr, sizeof(buffer));
-      unsigned char *temp = malloc(buf_ptr);
-      memcpy(temp, buffer, buf_ptr);
-      send_video_packet(VIDEO_CMD_FRAME_H264, temp, buf_ptr);
-      debug_f2("[CAPTURE] Storing chunk in buffer (used %d/%d bytes)\n",
-	       size, sizeof(buffer));
-      memcpy(buffer, ptr, size);
-      buf_ptr = size;
-    }
-    else {
-      debug_f1("[CAPTURE] Sending large chunk (%d bytes)\n", size);
-      send_video_packet(VIDEO_CMD_FRAME_H264, ptr, size);
-    }
-
-    start += size;
-  }
+  send_video_packet(VIDEO_CMD_FRAME_H264, ptr, length);
 }
 
 void send_h264_headers(struct h264_config *config) {

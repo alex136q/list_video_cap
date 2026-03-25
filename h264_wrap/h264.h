@@ -98,8 +98,13 @@ void extract_array(unsigned char *src,
 		   long int length,
 		   int offset,
 		   int stride,
-		   long int alloc_size,
 		   unsigned char *dst);
+
+void pack_array(unsigned char *src,
+		long int length,
+		int offset,
+		int stride,
+		unsigned char *dst);
 
 void dump_array(unsigned char *ptr, long size);
 

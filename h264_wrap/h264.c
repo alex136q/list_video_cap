@@ -13,10 +13,20 @@ void extract_array(unsigned char *src,
 		   long int length,
 		   int offset,
 		   int stride,
-		   long int alloc_size,
 		   unsigned char *dst){
 
   for(int ptr = offset, out_ptr = 0; ptr < length; ptr += stride, ++out_ptr) {
+    dst[out_ptr] = src[ptr];
+  }
+}
+
+void pack_array(unsigned char *src,
+		long int length,
+		int offset,
+		int stride,
+		unsigned char *dst){
+
+  for(int ptr = 0, out_ptr = offset; ptr < length; out_ptr += stride, ++ptr) {
     dst[out_ptr] = src[ptr];
   }
 }
@@ -115,15 +125,12 @@ void h264_encode_frame(struct h264_config *config,
     /* YUV 4:2:2 planar needs deinterlacing */
 
     extract_array(data, config->frame_config.size, 0, 2,
-		  config->frame_config.luma_length * config->frame_config.height,
 		  config->input_frame.img.plane[0]);
 
     extract_array(data, config->frame_config.size, 1, 4,
-		  config->frame_config.chroma_b_length * config->frame_config.height,
 		  config->input_frame.img.plane[1]);
 
     extract_array(data, config->frame_config.size, 3, 4,
-		  config->frame_config.chroma_r_length * config->frame_config.height,
 		  config->input_frame.img.plane[2]);
 
     config->input_frame.img.i_plane = 3;
@@ -308,8 +315,10 @@ void h264_decode_frame_internal(struct h264_config *config) {
     if(yuyv422) {
       if(config->debug_info) printf("[H264] [DEC] Decoding YUV 4:2:2 packed frame\n");
 
-      config->frame_planes.packed = malloc(config->frame->linesize[0]
-					   + buffer_extra_padding);
+      long int output_frame_size = config->frame->height * config->frame->width * 4;
+      config->frame_planes.packed = malloc(output_frame_size);
+      memset(config->frame_planes.packed, 0, output_frame_size);
+
       memcpy(config->frame_planes.packed,
 	     config->frame->data[0],
 	     config->frame->linesize[0]);
@@ -329,32 +338,42 @@ void h264_decode_frame_internal(struct h264_config *config) {
     else if(yuv422p) {
       if(config->debug_info) printf("[H264] [DEC] Decoding YUV 4:2:2 planar frame\n");
 
-      config->frame_planes.packed =
-	malloc(config->frame_config.size + buffer_extra_padding);
+      long int output_frame_size = config->frame->height * config->frame->width * 4;
+      config->frame_planes.packed = malloc(output_frame_size);
+      memset(config->frame_planes.packed, 0, output_frame_size);
 
       if(config->dump_bytes)
       printf("[H264] [DEC] Copying Y  data to offset %08Xh, size %08Xh\n",
 	     0 * config->frame_config.chroma_b_length, config->frame_config.luma_length);
 
-      memcpy(config->frame_planes.packed + 0 * config->frame_config.chroma_b_length,
-	     config->frame->data[0],
-	     config->frame_config.luma_length);
+      if(config->frame->data[0]) {
+	pack_array(config->frame->data[0],
+		   config->frame->linesize[0] * config->frame->height,
+		   0, 2,
+		   config->frame_planes.packed);
+      }
 
       if(config->dump_bytes)
       printf("[H264] [DEC] Copying Cb data to offset %08Xh, size %08Xh\n",
 	     2 * config->frame_config.chroma_b_length, config->frame_config.chroma_b_length);
 
-      memcpy(config->frame_planes.packed + 2 * config->frame_config.chroma_b_length,
-	     config->frame->data[1],
-	     config->frame_config.chroma_b_length);
+      if(config->frame->data[1]) {
+	pack_array(config->frame->data[1],
+		   config->frame->linesize[1] * config->frame->height,
+		   1, 4,
+		   config->frame_planes.packed);
+      }
 
       if(config->dump_bytes)
       printf("[H264] [DEC] Copying Cr data to offset %08Xh, size %08Xh\n",
 	     3 * config->frame_config.chroma_b_length, config->frame_config.chroma_r_length);
 
-      memcpy(config->frame_planes.packed + 3 * config->frame_config.chroma_b_length,
-	     config->frame->data[2],
-	     config->frame_config.chroma_r_length);
+      if(config->frame->data[2]) {
+	pack_array(config->frame->data[2],
+		   config->frame->linesize[2] * config->frame->height,
+		   2, 4,
+		   config->frame_planes.packed);
+      }
 
       config->h264_data.output[config->h264_data.output_frames] =
 	config->frame_planes.packed;
