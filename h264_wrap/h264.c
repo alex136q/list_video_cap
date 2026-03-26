@@ -43,7 +43,7 @@ void h264_init_encoder(struct h264_config *config,
   config->params.i_csp = config->frame_config.colorspace = colorspace;
   config->params.i_bitdepth = 8;
   config->params.i_level_idc = 9;
-  // config->params.i_keyint_max = 20;
+  config->params.i_keyint_max = 0;
 
   h264_resize_encoder_frame_internal(config, frame_width, frame_height);
 

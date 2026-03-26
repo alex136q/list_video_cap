@@ -30,7 +30,6 @@ void wait_for_capture(int video_devfd,
 void stream_frames();
 
 void send_frame(unsigned char *ptr, const int length);
-void send_stream(unsigned char *ptr, const int length);
 void send_video_packet(int type, void *ptr, long int size);
 
 #endif

@@ -114,8 +114,9 @@ void dump_msg_headers(const struct queue *stk) {
 
 void dump_queue_sizes() {
   if(!debug_cfg.enable_debug_msgs) return;
-  debug_f2("[VIDEO] [video_ctl] queue sizes: "
-	   "R %04Xh, W %04Xh\n",
-	   queue_length(&display.queue_r),
-	   queue_length(&display.queue_w));
+  debug_f3("[DEBUG] Queue sizes: "
+	   "C %04Xh, D %04Xh, F %04Xh\n",
+	   display.queue_cmds.length,
+	   display.queue_debug.length,
+	   display.queue_frames.length);
 }

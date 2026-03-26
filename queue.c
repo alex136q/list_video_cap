@@ -7,6 +7,7 @@ void init_queue(struct queue *stk) {
   stk->tail = NULL;
   stk->lock = 0;
   stk->max_length = 0x10;
+  stk->length = 0;
 }
 
 int queue_empty(struct queue *stk) {
@@ -14,8 +15,16 @@ int queue_empty(struct queue *stk) {
 }
 
 void queue_push(struct queue *stk, struct video_msg *data) {
-  while(queue_length(stk) >= stk->max_length);
   acquire_lock(&stk->lock);
+  if(stk->length >= stk->max_length) {
+    release_lock(&stk->lock);
+    acquire_lock(&stk->lock);
+  }
+  queue_push_unsafe(stk, data);
+  release_lock(&stk->lock);
+}
+
+void queue_push_unsafe(struct queue *stk, struct video_msg *data) {
   struct video_msg *last = malloc(sizeof(*data));
   *last = *data;
   if(stk->tail) {
@@ -28,7 +37,7 @@ void queue_push(struct queue *stk, struct video_msg *data) {
   }
   last->next = NULL;
   stk->tail = last;
-  release_lock(&stk->lock);
+  ++stk->length;
 }
 
 void queue_push_wait(struct queue *stk, struct video_msg *data,
@@ -58,7 +67,34 @@ void queue_pop(struct queue *stk, struct video_msg *data) {
   else {
     memset(data, 0, sizeof(*data));
   }
+  --stk->length;
   release_lock(&stk->lock);
+}
+
+void queue_unlink_unsafe(struct queue *stk, struct video_msg *ptr) {
+  if(stk->head == NULL || stk->tail == NULL) {
+    if(stk->head != NULL || stk->tail != NULL) {
+      debug_f0("[QUEUE] Corrupt queue end pointers\n");
+    }
+    debug_f0("[QUEUE] Unlink called on an empty queue\n");
+    exit(1);
+  }
+
+  if(ptr->prev == NULL) {
+    stk->head = ptr->next;
+  }
+  else {
+    ptr->prev->next = NULL;
+  }
+
+  if(ptr->next == NULL) {
+    stk->tail = NULL;
+  }
+  else {
+    ptr->next->prev = ptr->prev;
+  }
+
+  --stk->length;
 }
 
 void queue_foreach(const struct queue *stk,
@@ -97,10 +133,27 @@ void queue_purge(struct queue *stk,
   for(struct video_msg *msg = stk->head; msg != NULL;) {
     struct video_msg *next = msg->next;
     if(purge(msg)) {
-      if(msg->prev) msg->prev->next = msg->next;
-      if(msg->next) msg->next->prev = msg->prev;
-      if(msg->prev == NULL) stk->head = next;
-      if(msg->next == NULL) stk->tail = NULL;
+      queue_unlink_unsafe(stk, msg);
+      delete_video_msg(&msg);
+    }
+    msg = next;
+  }
+  release_lock(&stk->lock);
+}
+
+void queue_purge_all_but_last(struct queue *stk,
+			      int (*purge)(const struct video_msg *)) {
+  acquire_lock(&stk->lock);
+  for(struct video_msg *msg = stk->head; msg != NULL;) {
+    struct video_msg *next = msg->next;
+    if(next) {
+      debug_f0("[QUEUE] Deleting non-terminal node\n");
+      queue_unlink_unsafe(stk, msg);
+      delete_video_msg(&msg);
+    }
+    else if(purge(msg)) {
+      debug_f0("[QUEUE] On terminal node\n");
+      queue_unlink_unsafe(stk, msg);
       delete_video_msg(&msg);
     }
     msg = next;

@@ -30,7 +30,10 @@ void destroy_display();
 void rename_window();
 
 void set_image(const struct video_msg *cmd);
-int process_cmd(const struct video_msg *cmd);
+
+int process_packet_yuyv(const struct video_msg *cmd);
+int process_packet_h264(const struct video_msg *cmd);
+
 void render_frame();
 void render_test_frame();
 void *main_loop(void *dummy);

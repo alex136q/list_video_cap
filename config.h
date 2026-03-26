@@ -37,8 +37,9 @@ struct display_config {
     double render_frame_rate_fps;
   } stat;
 
-  struct queue queue_r;
-  struct queue queue_w;
+  struct queue queue_cmds;
+  struct queue queue_debug;
+  struct queue queue_frames;
 
   struct {
     int argc;

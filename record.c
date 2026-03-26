@@ -570,8 +570,10 @@ void send_frame(unsigned char *ptr, const int length)
 	       h264_encoder.h264_data.size,
 	       (long int)h264_encoder.h264_data.stream);
 
-      send_stream(h264_encoder.h264_data.stream,
-		  h264_encoder.h264_data.size);
+      debug_f1("[CAPTURE] Streaming %d bytes...\n", h264_encoder.h264_data.size);
+      send_video_packet(VIDEO_CMD_FRAME_H264,
+			h264_encoder.h264_data.stream,
+			h264_encoder.h264_data.size);
 
       if(h264_encoder.h264_data.stream) {
 	free(h264_encoder.h264_data.stream);
@@ -601,11 +603,6 @@ void send_video_packet(int type, void *ptr, long int length) {
   memcpy(msg.dptr, ptr, length);
 
   video_ctl(msg);
-}
-
-void send_stream(unsigned char *ptr, const int length) {
-  debug_f1("[CAPTURE] Streaming %d bytes...\n", length);
-  send_video_packet(VIDEO_CMD_FRAME_H264, ptr, length);
 }
 
 void send_h264_headers(struct h264_config *config) {
