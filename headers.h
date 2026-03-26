@@ -27,6 +27,7 @@
 #include "display.h"
 #include "cli.h"
 #include "config.h"
+#include "yuv.h"
 
 #include "h264_wrap/h264.h"
 
