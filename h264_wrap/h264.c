@@ -91,6 +91,11 @@ void h264_get_headers(struct h264_config *config) {
 void h264_encode_frame(struct h264_config *config,
 		       unsigned char *data) {
 
+  if(config->h264_data.stream) {
+    free(config->h264_data.stream);
+    config->h264_data.stream = NULL;
+  }
+
   /* input frames have no padding bytes at the end of scanlines */
   config->frame_config.size = (2
 			       * (long)config->frame_config.width
@@ -191,6 +196,8 @@ void h264_encode_frame(struct h264_config *config,
 }
 
 void h264_init_decoder(struct h264_config *config) {
+  memset(config, 0, sizeof(*config));
+
   /* cf. tips in avcodec.h */
   config->codec = avcodec_find_decoder(AV_CODEC_ID_H264);
   config->parser = av_parser_init(config->codec->id);

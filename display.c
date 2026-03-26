@@ -7,6 +7,8 @@ struct display_config display;
 struct h264_config h264_decoder;
 extern struct h264_config h264_encoder;
 
+extern struct yuv_matrix yuv_rgb;
+
 #define stream_h264_buffer_size 4096
 
 
@@ -17,7 +19,7 @@ void receive_partial_h264_packet(const struct video_msg *cmd);
 
 
 void video_ctl(struct video_msg cmd) {
-  debug_f0("[VIDEO] [video_ctl] "); dump_msg_header(&cmd);
+  debug_f0("[VIDEO] [video_ctl] Got packet "); dump_msg_header(&cmd);
 
   dump_queue_sizes();
 
@@ -26,13 +28,13 @@ void video_ctl(struct video_msg cmd) {
 	&& display.queue_w.head->oper == VIDEO_CMD_WRITE) {
     queue_pop(&display.queue_w, &msg);
     if(msg.dptr) {
-      debug_s1("[VIDEO] %s", (char *)msg.dptr);
+      debug_s1("[VIDEO] [video_ctl] %s", (char *)msg.dptr);
       free(msg.dptr);
     }
   }
 
   if(cmd.oper == VIDEO_CMD_OPEN) {
-    debug_f0("[VIDEO] opening window\n");
+    debug_f0("[VIDEO] [video_ctl] opening window\n");
     init_state();
     init_display();
     h264_init_decoder(&h264_decoder);
@@ -41,13 +43,13 @@ void video_ctl(struct video_msg cmd) {
   }
   else if(cmd.oper == VIDEO_CMD_SET_ARGC) {
     /* required by GLUT in the previous iteration */
-    debug_f1("[VIDEO] set argc = %d\n", cmd.size);
+    debug_f1("[VIDEO] [video_ctl] set argc = %d\n", cmd.size);
     display.other.argc = cmd.size;
     display.other.argv = (char **)calloc(sizeof(char *), cmd.size);
   }
   else if(cmd.oper == VIDEO_CMD_SET_ARGV) {
     /* required by GLUT in the previous iteration */
-    debug_f1("[VIDEO] set argv[%d]\n", cmd.size);
+    debug_f1("[VIDEO] [video_ctl] set argv[%d]\n", cmd.size);
     display.other.argv[cmd.size] = malloc(strlen(cmd.dptr));
     strcpy(display.other.argv[cmd.size], cmd.dptr);
   }
@@ -62,7 +64,7 @@ void video_ctl(struct video_msg cmd) {
   }
   else if(cmd.oper == VIDEO_CMD_FRAME_YUYV || cmd.oper == VIDEO_CMD_FRAME_H264) {
     if(cli.frame_capture_path != NULL) {
-      debug_s1("[VIDEO] Dumping packet into %s\n", cli.frame_capture_path);
+      debug_s1("[VIDEO] [video_ctl] Dumping packet into %s\n", cli.frame_capture_path);
       FILE *h264_dump_fd = fopen(cli.frame_capture_path, "a");
       fwrite(cmd.dptr, 1, cmd.size, h264_dump_fd);
       fclose(h264_dump_fd);
@@ -71,30 +73,34 @@ void video_ctl(struct video_msg cmd) {
     struct video_msg msg_copy;
     msg_copy.oper = cmd.oper;
     msg_copy.size = cmd.size;
+    msg_copy.dptr = NULL;
 
-    msg_copy.dptr = malloc(cmd.size);
-    memcpy(msg_copy.dptr, cmd.dptr, cmd.size);
-    if(cmd.size) free(cmd.dptr);
+    if(cmd.size) {
+      msg_copy.dptr = malloc(cmd.size);
+      memcpy(msg_copy.dptr, cmd.dptr, cmd.size);
+      free(cmd.dptr);
+    }
 
-    debug_f0("[VIDEO] cloned as "); dump_msg_header(&msg_copy);
-    debug_f2("[VIDEO] message queued (%d/%d)\n",
-	     queue_length(&display.queue_r),
-	     display.queue_r.max_length);
+    debug_f0("[VIDEO] [video_ctl] Cloned as  "); dump_msg_header(&msg_copy);
 
     queue_push(&display.queue_r, &msg_copy);
+
+    debug_f2("[VIDEO] [video_ctl] Message queued (%d/%d)\n",
+	     queue_length(&display.queue_r),
+	     display.queue_r.max_length);
 
     print_messages(&display.queue_r, "R");
     print_messages(&display.queue_w, "W");
   }
   else if(cmd.oper == VIDEO_CMD_CLOSE) {
-    debug_f0("[VIDEO] Quitting\n");
+    debug_f0("[VIDEO] [video_ctl] Quitting\n");
     display.window.open = 0;
     h264_free_decoder(&h264_decoder);
   }
   else if(cmd.oper == VIDEO_CMD_FRAME_H264) {
   }
   else {
-    debug_f1("[VIDEO] Unknown message type: %d; skipping\n", cmd.oper);
+    debug_f1("[VIDEO] [video_ctl] Unknown message type: %d; skipping\n", cmd.oper);
   }
 }
 
@@ -236,21 +242,23 @@ void update_frame_stats() {
 void process_cmds() {
   resize_fb();
   rename_window();
+  debug_f1("[RENDER] [RECV] Queue R size %d\n", queue_length(&display.queue_r));
   queue_purge(&display.queue_r, process_cmd);
 }
 
 int process_cmd(const struct video_msg *cmd) {
-    debug_f3("[RENDER] received cmd(%08lXh %08lXh %016lXh)\n",
-	     cmd->oper, cmd->size, (long int) cmd->dptr);
+    debug_f3("[RENDER] [RECV] received cmd(%08lXh %08lXh %016lXh)\n",
+	     cmd->oper, cmd->size, (long int)cmd->dptr);
 
     switch(cmd->oper) {
 
     case VIDEO_CMD_CLOSE:
-      debug_f0("[RENDER] closing\n");
+      debug_f0("[RENDER] [RECV] Closing\n");
       return 1;
 
     case VIDEO_CMD_FRAME_YUYV:
     case VIDEO_CMD_FRAME_H264:
+      debug_f0("[RENDER] [RECV] New frame\n");
       set_image(cmd);
       return 1;
 
@@ -267,7 +275,7 @@ int process_cmd(const struct video_msg *cmd) {
       return 1;
 
     default:
-      debug_f1("[RENDER] Unknown cmd %d\n", cmd->oper);
+      debug_f1("[RENDER] [RECV] Unknown cmd %d\n", cmd->oper);
       return 0;
     }
 }
@@ -480,98 +488,17 @@ unsigned char *yuyv_to_rgba(unsigned char *ptr,
 
       yy /= 255.0f; cb /= 255.0f; cr /= 255.0f;
 
-      /* mangled, cf. BT.601 matrix */
-      /*
-      static const float r_yy = +298.082f / 256.0f;
-      static const float r_cb =     +0.0f / 256.0f;
-      static const float r_cr = +408.583f / 256.0f;
-      static const float r_ct = -222.921f / 256.0f;
-
-      static const float g_yy = +298.082f / 256.0f;
-      static const float g_cb = -100.291f / 256.0f;
-      static const float g_cr = -208.120f / 256.0f;
-      static const float g_ct = +135.576f / 256.0f;
-
-      static const float b_yy = +298.082f / 256.0f;
-      static const float b_cb = +516.412f / 256.0f;
-      static const float b_cr =     +0.0f / 256.0f;
-      static const float b_ct = -276.736f / 256.0f;
-      */
-
-      /* mangled, cf. ITU BT.709 at https://en.wikipedia.org/wiki/YCbCr */
-      /*
-      static const float r_yy = +1.0000f;
-      static const float r_cb = +0.0000f;
-      static const float r_cr = +1.5748f;
-      static const float r_ct = +0.0000f;
-
-      static const float g_yy = +1.0000f;
-      static const float g_cb = -0.1873f;
-      static const float g_cr = -0.4618f;
-      static const float g_ct = +0.0000f;
-
-      static const float b_yy = +1.0000f;
-      static const float b_cb = +1.8556f;
-      static const float b_cr = +0.0000f;
-      static const float b_ct = +0.0000f;
-      */
-
-      /* cf. JFIF/JPEG YUV at https://en.wikipedia.org/wiki/YCbCr */
-      /*
-      static const float r_yy = +1.0000f;
-      static const float r_cb = +0.0000f;
-      static const float r_cr = +1.4020f;
-      static const float r_ct = +1.4020f * -128.0f;
-
-      static const float g_yy = +1.0000f;
-      static const float g_cb = -0.3441f;
-      static const float g_cr = -0.7141f;
-      static const float g_ct = +0.3411f * -128.0f + 0.7141f * -128.0f;
-
-      static const float b_yy = +1.0000f;
-      static const float b_cb = +1.7720f;
-      static const float b_cr = +0.0000f;
-      static const float b_ct = +1.7720f * -128.0f;
-      */
-
-      /*
-      float r = ((float)yy * r_yy + (float)cb * r_cb + (float)cr * r_cr + 128.0f * r_ct);
-      float g = ((float)yy * g_yy + (float)cb * g_cb + (float)cr * g_cr + 128.0f * g_ct);
-      float b = ((float)yy * b_yy + (float)cb * b_cb + (float)cr * b_cr + 128.0f * b_ct);
-      */
-
-      /* experimental colorspace transform */
-
-      static const float r_sc = +1.0000f;
-      static const float r_yy = +1.0000f;
-      static const float r_cb = +0.0000f;
-      static const float r_cr = +0.5000f;
-      static const float r_ct = -0.0000f;
-
-      static const float g_sc = +1.0000f;
-      static const float g_yy = +1.0000f;
-      static const float g_cb = -0.2000f;
-      static const float g_cr = -0.4000f;
-      static const float g_ct = +0.5000f;
-
-      static const float b_sc = +1.0000f;
-      static const float b_yy = +1.0000f;
-      static const float b_cb = +0.5000f;
-      static const float b_cr = +0.0000f;
-      static const float b_ct = -0.0000f;
-
-      float r = (r_yy * yy + r_cb * cb + r_cr * cr + r_ct) * 1.0f / r_sc;
-      float g = (g_yy * yy + g_cb * cb + g_cr * cr + g_ct) * 1.0f / g_sc;
-      float b = (b_yy * yy + b_cb * cb + b_cr * cr + b_ct) * 1.0f / b_sc;
+      float r = (yuv_rgb.r_yy * yy + yuv_rgb.r_cb * cb + yuv_rgb.r_cr * cr + yuv_rgb.r_ct) * 1.0f / yuv_rgb.r_sc;
+      float g = (yuv_rgb.g_yy * yy + yuv_rgb.g_cb * cb + yuv_rgb.g_cr * cr + yuv_rgb.g_ct) * 1.0f / yuv_rgb.g_sc;
+      float b = (yuv_rgb.b_yy * yy + yuv_rgb.b_cb * cb + yuv_rgb.b_cr * cr + yuv_rgb.b_ct) * 1.0f / yuv_rgb.b_sc;
 
       if(r < 0.001f) { r = 0.001f; } else if (r > 1.0f) { r = 1.0f; }
       if(g < 0.001f) { g = 0.001f; } else if (g > 1.0f) { g = 1.0f; }
       if(b < 0.001f) { b = 0.001f; } else if (b > 1.0f) { b = 1.0f; }
 
-      float gamma = 2.000f;
-      r = pow(r, gamma);
-      g = pow(g, gamma);
-      b = pow(b, gamma);
+      r = pow(r, yuv_rgb.gamma);
+      g = pow(g, yuv_rgb.gamma);
+      b = pow(b, yuv_rgb.gamma);
 
       int ir = floor(r * 255.0f);
       int ig = floor(g * 255.0f);

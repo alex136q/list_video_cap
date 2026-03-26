@@ -573,11 +573,12 @@ void send_frame(unsigned char *ptr, const int length)
       send_stream(h264_encoder.h264_data.stream,
 		  h264_encoder.h264_data.size);
 
-      free(ptr);
-
       if(h264_encoder.h264_data.stream) {
 	free(h264_encoder.h264_data.stream);
+	h264_encoder.h264_data.stream = NULL;
       }
+
+      free(ptr);
     }
     else {
       debug_f0("[CAPTURE] No data to send\n");
@@ -596,12 +597,14 @@ void send_video_packet(int type, void *ptr, long int length) {
 
   msg.oper = type;
   msg.size = length;
-  msg.dptr = ptr;
+  msg.dptr = malloc(length);
+  memcpy(msg.dptr, ptr, length);
 
   video_ctl(msg);
 }
 
 void send_stream(unsigned char *ptr, const int length) {
+  debug_f1("[CAPTURE] Streaming %d bytes...\n", length);
   send_video_packet(VIDEO_CMD_FRAME_H264, ptr, length);
 }
 

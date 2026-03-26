@@ -93,6 +93,7 @@ void queue_filter(struct queue *stk,
 
 void queue_purge(struct queue *stk,
 		 int (*purge)(const struct video_msg *)) {
+  acquire_lock(&stk->lock);
   for(struct video_msg *msg = stk->head; msg != NULL;) {
     struct video_msg *next = msg->next;
     if(purge(msg)) {
@@ -104,6 +105,7 @@ void queue_purge(struct queue *stk,
     }
     msg = next;
   }
+  release_lock(&stk->lock);
 }
 
 void queue_dump(struct queue *stk) {

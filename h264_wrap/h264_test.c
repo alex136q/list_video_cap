@@ -78,6 +78,8 @@ void encode_test_frames(struct h264_config *config) {
 		  &config->frame_config.size,
 		  (60.0f * (float)frame / h264_cli_config.frame_count));
 
+    config->h264_data.stream = NULL;
+
     h264_encode_frame(config, raw_yuyv);
 
     free(raw_yuyv);

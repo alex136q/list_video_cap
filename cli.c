@@ -6,6 +6,8 @@ extern struct display_config display;
 
 extern struct h264_config h264_encoder;
 
+extern struct yuv_matrix yuv_rgb;
+
 struct cli_args cli;
 
 
@@ -83,7 +85,12 @@ void show_help_text() {
 	   "\t\t-T flip_v\t\tFlip along the vertical axis (up/down).\n"
 	   "\t\t-T flip_h\t\tFlip along the horizontal axis (left/right).\n"
 	   "\t\t-T gray\tConvert to grayscale (skip YUV to RGBA conversion).\n"
-	   "\t\t-T invert\t\tNegate RGB color.\n");
+	   "\t\t-T invert\t\tNegate RGB color.\n"
+	   "\n-M <type>\n\tSet YUV to RGB transformation parameters:\n"
+	   "\t\t-M BT601\t\tAs with PAL.\n"
+	   "\t\t-M BT709\t\tAs for sRGB.\n"
+	   "\t\t-M JPEG\t\tSame as JPEG.\n"
+	   "\t\t-M custom\t\tExperimental setting.\n");
 }
 
 void populate_cli_arguments(int argc, char **argv) {
@@ -123,6 +130,9 @@ void populate_cli_arguments(int argc, char **argv) {
   display.transform.flip_h = 0;
   display.transform.flip_v = 0;
   display.transform.complement = 0;
+
+  set_yuv_matrix_experimental(&yuv_rgb);
+
 
   for(int arg = 2; arg < argc; ++arg) {
     if(strcmp(argv[arg], "-d") == 0) {
@@ -204,6 +214,13 @@ void populate_cli_arguments(int argc, char **argv) {
       if(strcmp(argv[arg], "flip_v") == 0) display.transform.flip_v ^= 1;
       if(strcmp(argv[arg], "flip_h") == 0) display.transform.flip_h ^= 1;
       if(strcmp(argv[arg], "invert") == 0) display.transform.complement ^= 1;
+    }
+    else if(strcmp(argv[arg], "-M") == 0 && argc > arg) {
+      ++arg;
+      if(strcmp(argv[arg], "BT601" ) == 0) set_yuv_matrix_BT601(&yuv_rgb);
+      if(strcmp(argv[arg], "BT709" ) == 0) set_yuv_matrix_BT709(&yuv_rgb);
+      if(strcmp(argv[arg], "JPEG"  ) == 0) set_yuv_matrix_JPEG(&yuv_rgb);
+      if(strcmp(argv[arg], "custom") == 0) set_yuv_matrix_experimental(&yuv_rgb);
     }
     else {
       show_cli_error_text(arg);
