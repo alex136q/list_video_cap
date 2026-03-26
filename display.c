@@ -472,11 +472,13 @@ unsigned char *yuyv_to_rgba(unsigned char *ptr,
     int col;
 
     for(col = 0; col < width; ++col) {
-      const int cb_diff_ptr = (col & 1) ? -1 : 0;
+      const int cb_diff_ptr = (col & 1) ? -2 : 0;
 
-      unsigned char yy = ptr[in_row_ptr + col * 2];
-      unsigned char cb = ptr[in_row_ptr + col * 2 + cb_diff_ptr + 1];
-      unsigned char cr = ptr[in_row_ptr + col * 2 + cb_diff_ptr + 3];
+      float yy = (float)ptr[in_row_ptr + col * 2];
+      float cb = (float)ptr[in_row_ptr + col * 2 + cb_diff_ptr + 1];
+      float cr = (float)ptr[in_row_ptr + col * 2 + cb_diff_ptr + 3];
+
+      yy /= 255.0f; cb /= 255.0f; cr /= 255.0f;
 
       /* mangled, cf. BT.601 matrix */
       /*
@@ -532,47 +534,56 @@ unsigned char *yuyv_to_rgba(unsigned char *ptr,
       static const float b_ct = +1.7720f * -128.0f;
       */
 
-      /* experimental */
+      /*
+      float r = ((float)yy * r_yy + (float)cb * r_cb + (float)cr * r_cr + 128.0f * r_ct);
+      float g = ((float)yy * g_yy + (float)cb * g_cb + (float)cr * g_cr + 128.0f * g_ct);
+      float b = ((float)yy * b_yy + (float)cb * b_cb + (float)cr * b_cr + 128.0f * b_ct);
+      */
+
+      /* experimental colorspace transform */
+
+      static const float r_sc = +1.0000f;
       static const float r_yy = +1.0000f;
       static const float r_cb = +0.0000f;
-      static const float r_cr = +0.7000f;
-      static const float r_ct = +0.0000f;
-      static const float r_sc = +1.7000f;
+      static const float r_cr = +0.5000f;
+      static const float r_ct = -0.0000f;
 
+      static const float g_sc = +1.0000f;
       static const float g_yy = +1.0000f;
-      static const float g_cb = +0.1000f;
-      static const float g_cr = -0.3000f;
-      static const float g_ct = +0.0000f;
-      static const float g_sc = +1.4000f;
+      static const float g_cb = -0.2000f;
+      static const float g_cr = -0.4000f;
+      static const float g_ct = +0.5000f;
 
+      static const float b_sc = +1.0000f;
       static const float b_yy = +1.0000f;
-      static const float b_cb = -0.9000f;
+      static const float b_cb = +0.5000f;
       static const float b_cr = +0.0000f;
-      static const float b_ct = +0.0000f;
-      static const float b_sc = +1.9000f;
+      static const float b_ct = -0.0000f;
 
-      float r = ((float)yy * r_yy + (float)cb * r_cb + (float)cr * r_cr + r_ct);
-      float g = ((float)yy * g_yy + (float)cb * g_cb + (float)cr * g_cr + g_ct);
-      float b = ((float)yy * b_yy + (float)cb * b_cb + (float)cr * b_cr + b_ct);
+      float r = (r_yy * yy + r_cb * cb + r_cr * cr + r_ct) * 1.0f / r_sc;
+      float g = (g_yy * yy + g_cb * cb + g_cr * cr + g_ct) * 1.0f / g_sc;
+      float b = (b_yy * yy + b_cb * cb + b_cr * cr + b_ct) * 1.0f / b_sc;
 
-      r /= r_sc; g /= r_sc; b /= b_sc;
+      if(r < 0.001f) { r = 0.001f; } else if (r > 1.0f) { r = 1.0f; }
+      if(g < 0.001f) { g = 0.001f; } else if (g > 1.0f) { g = 1.0f; }
+      if(b < 0.001f) { b = 0.001f; } else if (b > 1.0f) { b = 1.0f; }
 
-      float gamma = +1.000f;
+      float gamma = 2.000f;
       r = pow(r, gamma);
       g = pow(g, gamma);
       b = pow(b, gamma);
 
-      if(r < 0) r = 0; if(r > 255) r = 255;
-      if(g < 0) g = 0; if(g > 255) g = 255;
-      if(b < 0) b = 0; if(b > 255) b = 255;
+      int ir = floor(r * 255.0f);
+      int ig = floor(g * 255.0f);
+      int ib = floor(b * 255.0f);
 
-      if(r < 0) { r = 0; } if (r > 255) { r = 255; }
-      if(g < 0) { r = 0; } if (g > 255) { g = 255; }
-      if(b < 0) { r = 0; } if (b > 255) { b = 255; }
+      if(ir < 0) { ir = 0; } if(ir > 255) { ir = 255; }
+      if(ig < 0) { ig = 0; } if(ig > 255) { ig = 255; }
+      if(ib < 0) { ib = 0; } if(ib > 255) { ib = 255; }
 
-      rgba[out_row_ptr + col * 4 + 0] = r;
-      rgba[out_row_ptr + col * 4 + 1] = g;
-      rgba[out_row_ptr + col * 4 + 2] = b;
+      rgba[out_row_ptr + col * 4 + 0] = ir;
+      rgba[out_row_ptr + col * 4 + 1] = ig;
+      rgba[out_row_ptr + col * 4 + 2] = ib;
       rgba[out_row_ptr + col * 4 + 3] = 0xFF;
     }
 
