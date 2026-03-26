@@ -96,6 +96,6 @@ void set_yuv_matrix_experimental(struct yuv_matrix *matrix) {
   matrix->b_ct = +0.0000f;
   matrix->b_sc = +1.0000f;
 
-  matrix->gamma = +1.000f;
+  matrix->gamma = +2.000f;
 }
 
