@@ -642,3 +642,32 @@ void send_h264_headers(struct h264_config *config) {
   send_video_packet(VIDEO_CMD_FRAME_H264, headers_data, headers_size);
 }
 
+void stream_file() {
+  unsigned char buffer[512];
+
+  FILE *replay_fd = fopen(cli.frame_replay_path, "r");
+
+  send_video_packet(VIDEO_CMD_SET_WIDTH, NULL, display.capture.req_width);
+  send_video_packet(VIDEO_CMD_SET_HEIGHT, NULL, display.capture.req_height);
+
+  int size;
+
+  while(!feof(replay_fd) && display.window.open == 0) {
+    size = fread(buffer, 1, sizeof(buffer), replay_fd);
+    if(size > 0) {
+      send_video_packet(VIDEO_CMD_FRAME_H264, buffer, size);
+      sleep_ms(display.other.frame_delay_ms);
+    }
+  }
+
+  while(!feof(replay_fd) && display.window.open == 1) {
+    size = fread(buffer, 1, sizeof(buffer), replay_fd);
+    if(size > 0) {
+      send_video_packet(VIDEO_CMD_FRAME_H264, buffer, size);
+      sleep_ms(display.other.frame_delay_ms);
+    }
+  }
+
+  fclose(replay_fd);
+}
+

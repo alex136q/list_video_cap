@@ -37,8 +37,13 @@ void handle_cli_cmd() {
     stream_frames();
     toggle_graphics(0);
   }
+  else if(strcmp(cli.cmd, "replay") == 0) {
+    toggle_graphics(1);
+    stream_file();
+    toggle_graphics(0);
+  }
   else {
-    show_cli_error_text(0);
+    show_cli_error_text(0, 1, &cli.cmd);
   }
 }
 
@@ -52,6 +57,7 @@ void show_help_text() {
 	   "\n./list_video_cap list -d <path> -i <integer>\n\tLists only the capabilities of the given input and device.\n"
 	   "\n./list_video_cap save -d <path> -i <integer> -o <path>\n\tSave a single frame as grayscale (Y' component).\n"
 	   "\n./list_video_cap watch -d <path> -i <integer>\n\tOpens a window displaying the camera feed.\n"
+	   "\n./list_video_cap replay -L <path>\n\tOpens a window displaying the camera feed previously written to a file.\n"
 	   "\n"
 	   "Flags:\n"
 	   "\n-c\n\tFallback to raw frame data channel. The absence of this flag\n"
@@ -68,6 +74,7 @@ void show_help_text() {
 	   "\n-m\n\tShow memory dumps in debug messages.\n"
 	   "\n-o <path>\n\tCapture file for the encoded stream on the decoder side.\n"
 	   "\n-O <path>\n\tCapture file for the encoded stream on the encoder side.\n"
+	   "\n-L <path>\n\tCapture file to replay.\n"
 	   "\n-t\n\tTest OpenGL by rendering dummy frames.\n"
 	   "\n-F <type>\n\tOverlay solid color patterns over the captured frame (can be combined):\n"
 	   "\t\t-F full\t\tFill whole frame.\n"
@@ -88,15 +95,13 @@ void show_help_text() {
 }
 
 void populate_cli_arguments(int argc, char **argv) {
-  cli.cmd = NULL;
+  cli.cmd = (argc >= 2) ? argv[1] : NULL;
+
   cli.video_dev_path = "/dev/video0";
   cli.video_dev_input = 0;
   cli.frame_capture_path = NULL;
   cli.frame_early_capture_path = NULL;
-
-  if(argc > 1) {
-    cli.cmd = argv[1];
-  }
+  cli.frame_replay_path = NULL;
 
   debug_cfg.show_memory_dump = 0;
 
@@ -144,6 +149,9 @@ void populate_cli_arguments(int argc, char **argv) {
       sprintf(cmd, "rm \"%s\"", cli.frame_early_capture_path);
       system(cmd);
     }
+    else if(strcmp(argv[arg], "-L") == 0) {
+      cli.frame_replay_path = argv[++arg];
+    }
     else if(strcmp(argv[arg], "-i") == 0) {
       cli.video_dev_input = atoi(argv[++arg]);
     }
@@ -160,7 +168,7 @@ void populate_cli_arguments(int argc, char **argv) {
     else if(strcmp(argv[arg], "-f") == 0 && argc > arg) {
       const int freq_hz = atoi(argv[++arg]); /* max. FPS */
       if(freq_hz == 0) {
-	display.other.frame_delay_ms = 0;
+	display.other.frame_delay_ms = 20; /* FPS of 50 */
       }
       else {
 	display.other.frame_delay_ms = 1000 / freq_hz;
@@ -171,20 +179,11 @@ void populate_cli_arguments(int argc, char **argv) {
     }
     else if(strcmp(argv[arg], "-F") == 0 && argc > arg) {
       ++arg;
-      if(strcmp(argv[arg], "full") == 0)
-	display.test.fill_solid = 1;
-      else if(strcmp(argv[arg], "half") == 0)
-	display.test.fill_half = 1;
-      else if(strcmp(argv[arg], "pixel") == 0)
-	display.test.fill_pixel = 1;
-      else if(strcmp(argv[arg], "diag") == 0)
-	display.test.fill_diag = 1;
-      else if(strcmp(argv[arg], "horiz") == 0)
-	display.test.fill_horiz = 1;
-      else {
-	show_cli_error_text(arg);
-	exit(1);
-      }
+      if(strcmp(argv[arg], "full") == 0) { display.test.fill_solid = 1; }
+      if(strcmp(argv[arg], "half") == 0) { display.test.fill_half = 1; }
+      if(strcmp(argv[arg], "pixel") == 0) { display.test.fill_pixel = 1; }
+      if(strcmp(argv[arg], "diag") == 0) { display.test.fill_diag = 1; }
+      if(strcmp(argv[arg], "horiz") == 0) { display.test.fill_horiz = 1; }
     }
     else if(strcmp(argv[arg], "-R") == 0) {
       display.window.fixed_size = 0;
@@ -218,15 +217,19 @@ void populate_cli_arguments(int argc, char **argv) {
     else if(strcmp(argv[arg], "-M") == 0 && argc > arg) {
       ++arg;
       if(strcmp(argv[arg], "BT601" ) == 0) set_yuv_matrix_BT601(&yuv_rgb);
-      if(strcmp(argv[arg], "BT709" ) == 0) set_yuv_matrix_BT709(&yuv_rgb);
-      if(strcmp(argv[arg], "JPEG"  ) == 0) set_yuv_matrix_JPEG(&yuv_rgb);
-      if(strcmp(argv[arg], "custom") == 0) set_yuv_matrix_experimental(&yuv_rgb);
+      else if(strcmp(argv[arg], "BT709" ) == 0) set_yuv_matrix_BT709(&yuv_rgb);
+      else if(strcmp(argv[arg], "JPEG"  ) == 0) set_yuv_matrix_JPEG(&yuv_rgb);
+      else if(strcmp(argv[arg], "custom") == 0) set_yuv_matrix_experimental(&yuv_rgb);
+      else {
+	show_cli_error_text(arg, argc, argv);
+	exit(1);
+      }
     }
     else if(strcmp(argv[arg], "-I") == 0 && argc > arg) {
       display.h264_param.keyframe_interval = atoi(argv[++arg]);
     }
     else {
-      show_cli_error_text(arg);
+      show_cli_error_text(arg, argc, argv);
     }
   }
   h264_init_encoder(&h264_encoder,
@@ -236,12 +239,11 @@ void populate_cli_arguments(int argc, char **argv) {
 		    display.h264_param.keyframe_interval);
 }
 
-void show_cli_error_text(int arg) {
-  debug_cfg.enable_debug_msgs = 1;
-  if(arg > 0) {
-    debug_s1("Unknown flag or argument: %s\n", cli.argv[arg]);
+void show_cli_error_text(int arg, int argc, char **argv) {
+  if(arg > 0 && arg < argc && argv && argv[arg]) {
+    printf("Unknown flag or argument: %s\n", argv[arg]);
   }
-  debug_s1("Run \"%s help\" for a list of supported commands.\n", cli.argv[0]);
+  printf("Run \"%s help\" for a list of supported commands.\n", argv[0]);
   exit(1);
 }
 
