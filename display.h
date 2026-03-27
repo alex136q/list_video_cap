@@ -41,8 +41,6 @@ void *main_loop(void *dummy);
 void resize_window(int msg_width, int msg_height);
 void resize_fb();
 
-void clear_msg(struct video_msg *msg);
-  
 void update_frame_stats();
 
 unsigned char *yuyv_to_gray(unsigned char *ptr,

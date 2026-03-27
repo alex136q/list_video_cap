@@ -13,6 +13,7 @@ struct display_config {
     int use_h264;
     int chunk_size;
     int colorspace;
+    int keyframe_interval;
   } h264_param;
 
   struct {
@@ -37,7 +38,7 @@ struct display_config {
     double render_frame_rate_fps;
   } stat;
 
-  struct queue queue_cmds;
+  struct queue queue_packets;
   struct queue queue_debug;
   struct queue queue_frames;
 

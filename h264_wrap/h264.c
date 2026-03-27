@@ -34,7 +34,8 @@ void pack_array(unsigned char *src,
 void h264_init_encoder(struct h264_config *config,
 		       int frame_width,
 		       int frame_height,
-		       int colorspace) {
+		       int colorspace,
+		       int interval) {
 
   x264_param_default(&config->params);
 
@@ -43,7 +44,8 @@ void h264_init_encoder(struct h264_config *config,
   config->params.i_csp = config->frame_config.colorspace = colorspace;
   config->params.i_bitdepth = 8;
   config->params.i_level_idc = 9;
-  config->params.i_keyint_max = 0;
+  config->params.i_keyint_min = 1;
+  config->params.i_keyint_max = interval;
 
   h264_resize_encoder_frame_internal(config, frame_width, frame_height);
 
@@ -199,7 +201,7 @@ void h264_init_decoder(struct h264_config *config) {
   memset(config, 0, sizeof(*config));
 
   /* cf. tips in avcodec.h */
-  config->codec = avcodec_find_decoder(AV_CODEC_ID_H264);
+  config->codec = (AVCodec *)avcodec_find_decoder(AV_CODEC_ID_H264);
   config->parser = av_parser_init(config->codec->id);
   config->context = avcodec_alloc_context3(config->codec);
   avcodec_open2(config->context, config->codec, NULL);

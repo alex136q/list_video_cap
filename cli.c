@@ -33,14 +33,11 @@ void handle_cli_cmd() {
     toggle_graphics(0);
   }
   else if(strcmp(cli.cmd, "watch") == 0) {
-    struct video_msg argv_msg;
-    argv_msg.oper = VIDEO_CMD_SET_ARGC; argv_msg.size = 1;
-    argv_msg.dptr = NULL; video_ctl(argv_msg);
+    send_video_packet(VIDEO_CMD_SET_ARGC, NULL, 1);
     for(int arg = 0; arg < 1; ++arg) {
       debug_f1("Passing argv[%d]", arg);
       debug_s1(" \"%s\"...\n", cli.argv[arg]);
-      argv_msg.oper = VIDEO_CMD_SET_ARGV; argv_msg.size = arg;
-      argv_msg.dptr = cli.argv[arg]; video_ctl(argv_msg);
+      send_video_packet(VIDEO_CMD_SET_ARGV, cli.argv[arg], arg);
     }
     toggle_graphics(1);
     stream_frames();
@@ -64,8 +61,9 @@ void show_help_text() {
 	   "\n"
 	   "Flags:\n"
 	   "\n-c\n\tFallback to raw frame data channel. The absence of this flag\n"
+	   "\n-I <count>\n\tKeyframe interval (maximum frame count).\n"
 	   "\tcauses the application to stream H.264-encoded packets.\n"
-	   "\n-k <SIZE>\n\tSize of the H.264 packets to be streamed to the graphics thread.\n"
+	   "\n-k <size>\n\tSize of the H.264 packets to be streamed to the graphics thread.\n"
 	   "\n-f <FPS>\n\tLimit rendering frame rate to <FPS>.\n"
 	   "\n-j\n\tUse planar YUV 4:2:2 encoding. Default encoding is packed YUV 4:2:2.\n"
 	   "\n-v\n\tEnable debug messages.\n"
@@ -74,6 +72,8 @@ void show_help_text() {
 	   "\n-R\n\tAllow window to be resized by the user.\n"
 	   "\n-b\n\tShow a border around the video feed.\n"
 	   "\n-m\n\tShow memory dumps in debug messages.\n"
+	   "\n-o <PATH>\n\tCapture file for the encoded stream on the decoder side.\n"
+	   "\n-O <PATH>\n\tCapture file for the encoded stream on the encoder side.\n"
 	   "\n-t\n\tTest OpenGL by rendering dummy frames.\n"
 	   "\n-F <type>\n\tOverlay solid color patterns over the captured frame (can be combined):\n"
 	   "\t\t-F full\t\tFill whole frame.\n"
@@ -100,6 +100,7 @@ void populate_cli_arguments(int argc, char **argv) {
   cli.video_dev_path = NULL;
   cli.video_dev_input = -1;
   cli.frame_capture_path = NULL;
+  cli.frame_early_capture_path = NULL;
 
   if(argc > 1) {
     cli.cmd = argv[1];
@@ -125,6 +126,7 @@ void populate_cli_arguments(int argc, char **argv) {
   display.h264_param.use_h264 = 1;
   display.h264_param.chunk_size = 1024;
   display.h264_param.colorspace = X264_CSP_YUYV;
+  display.h264_param.keyframe_interval = 10;
 
   display.transform.grayscale = 0;
   display.transform.flip_h = 0;
@@ -142,6 +144,12 @@ void populate_cli_arguments(int argc, char **argv) {
       cli.frame_capture_path = argv[++arg];
       char cmd[1024];
       sprintf(cmd, "rm \"%s\"", cli.frame_capture_path);
+      system(cmd);
+    }
+    else if(strcmp(argv[arg], "-O") == 0) {
+      cli.frame_early_capture_path = argv[++arg];
+      char cmd[1024];
+      sprintf(cmd, "rm \"%s\"", cli.frame_early_capture_path);
       system(cmd);
     }
     else if(strcmp(argv[arg], "-i") == 0) {
@@ -222,15 +230,18 @@ void populate_cli_arguments(int argc, char **argv) {
       if(strcmp(argv[arg], "JPEG"  ) == 0) set_yuv_matrix_JPEG(&yuv_rgb);
       if(strcmp(argv[arg], "custom") == 0) set_yuv_matrix_experimental(&yuv_rgb);
     }
+    else if(strcmp(argv[arg], "-I") == 0 && argc > arg) {
+      display.h264_param.keyframe_interval = atoi(argv[++arg]);
+    }
     else {
       show_cli_error_text(arg);
     }
   }
-
   h264_init_encoder(&h264_encoder,
 		    display.capture.req_width,
 		    display.capture.req_height,
-		    display.h264_param.colorspace);
+		    display.h264_param.colorspace,
+		    display.h264_param.keyframe_interval);
 }
 
 void show_cli_error_text(int arg) {

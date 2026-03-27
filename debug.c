@@ -101,8 +101,8 @@ void dump_msg(const struct video_msg *msg) {
 
 void dump_msg_header(const struct video_msg *msg) {
   if(!debug_cfg.enable_debug_msgs) return;
-  debug_f3("cmd(%08Xh %08Xh %016lXh)\n",
-	   msg->oper, msg->size, (const long int)msg->dptr);
+  debug_f4("cmd(%08Xh %08Xh %016lXh #%08X)\n",
+	   msg->oper, msg->size, (const long int)msg->dptr, msg->id);
 }
 
 void dump_msg_headers(const struct queue *stk) {
@@ -116,7 +116,7 @@ void dump_queue_sizes() {
   if(!debug_cfg.enable_debug_msgs) return;
   debug_f3("[DEBUG] Queue sizes: "
 	   "C %04Xh, D %04Xh, F %04Xh\n",
-	   display.queue_cmds.length,
+	   display.queue_packets.length,
 	   display.queue_debug.length,
 	   display.queue_frames.length);
 }

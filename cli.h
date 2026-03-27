@@ -8,6 +8,7 @@ struct cli_args {
   char *video_dev_path;
   int video_dev_input;
   char *frame_capture_path;
+  char *frame_early_capture_path;
   int needs_graphics;
 };
 

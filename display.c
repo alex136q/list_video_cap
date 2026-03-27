@@ -19,11 +19,12 @@ void receive_partial_h264_packet(const struct video_msg *cmd);
 
 
 void video_ctl(struct video_msg cmd) {
-  debug_f0("[VIDEO] [video_ctl] Got packet "); dump_msg_header(&cmd);
+  debug_f0("[VIDEO] [video_ctl] Got packet\n"); dump_msg_header(&cmd);
 
   dump_queue_sizes();
 
   struct video_msg msg;
+
   while(display.queue_debug.head != NULL
 	&& display.queue_debug.head->oper == VIDEO_CMD_WRITE) {
     queue_pop(&display.queue_debug, &msg);
@@ -64,41 +65,38 @@ void video_ctl(struct video_msg cmd) {
   }
   else if(cmd.oper == VIDEO_CMD_FRAME_YUYV
 	  || cmd.oper == VIDEO_CMD_FRAME_H264) {
-    if(cli.frame_capture_path != NULL) {
+    if(cli.frame_capture_path != NULL && cmd.oper == VIDEO_CMD_FRAME_H264) {
       debug_s1("[VIDEO] [video_ctl] Dumping packet into %s\n", cli.frame_capture_path);
       FILE *h264_dump_fd = fopen(cli.frame_capture_path, "a");
       fwrite(cmd.dptr, 1, cmd.size, h264_dump_fd);
       fclose(h264_dump_fd);
     }
 
-    struct video_msg msg_copy;
-    msg_copy.oper = cmd.oper;
-    msg_copy.size = cmd.size;
-    msg_copy.dptr = NULL;
-
+    struct video_msg *msg_copy = alloc_video_msg();
+    msg_copy->oper = cmd.oper;
+    msg_copy->size = cmd.size;
     if(cmd.size) {
-      msg_copy.dptr = malloc(cmd.size);
-      memcpy(msg_copy.dptr, cmd.dptr, cmd.size);
-      free(cmd.dptr);
-    }
-
-    debug_f0("[VIDEO] [video_ctl] Cloned as  "); dump_msg_header(&msg_copy);
-
-    if(cmd.oper == VIDEO_CMD_FRAME_YUYV) {
-      /* will be handled in the display thread's main loop, immediately */
-      queue_push(&display.queue_frames, &msg_copy);
+      msg_copy->dptr = cmd.dptr;
     }
     else {
-      /* will be handled in the display thread's main loop, on a second pass */
-      queue_push(&display.queue_cmds, &msg_copy);
+      msg_copy->dptr = NULL;
+    }
+
+    debug_f0("[VIDEO] [video_ctl] Cloned as:\n"); dump_msg_header(msg_copy);
+
+    if(cmd.oper == VIDEO_CMD_FRAME_YUYV) {
+      queue_push(&display.queue_frames, msg_copy);
+    }
+    else {
+      queue_push(&display.queue_packets, msg_copy);
     }
 
     debug_f3("[VIDEO] Message queued (%d/%d) at %016lX\n",
-	     display.queue_cmds.length,
-	     display.queue_cmds.max_length,
-	     (long int)display.queue_cmds.tail);
+	     display.queue_packets.length,
+	     display.queue_packets.max_length,
+	     (long int)display.queue_packets.tail);
 
-    print_messages(&display.queue_cmds, "CTRL ");
+    print_messages(&display.queue_packets, "CTRL ");
     print_messages(&display.queue_debug, "DEBUG");
     print_messages(&display.queue_debug, "VIDEO");
   }
@@ -113,10 +111,7 @@ void video_ctl(struct video_msg cmd) {
 }
 
 void toggle_graphics(int init) {
-  struct video_msg video_openclose;
-  memset(&video_openclose, 0, sizeof(struct video_msg));
-  video_openclose.oper = init ? VIDEO_CMD_OPEN : VIDEO_CMD_CLOSE;
-  video_ctl(video_openclose);
+  send_video_packet((init ? VIDEO_CMD_OPEN : VIDEO_CMD_CLOSE), NULL, 0);
 }
 
 void print_messages(struct queue *stk, const char *debug_label) {
@@ -125,7 +120,7 @@ void print_messages(struct queue *stk, const char *debug_label) {
 
   sprintf(buf,
 	  "[VIDEO] Queue sizes: R%d %04Xh, W%d %04Xh, F%d %04Xh\n",
-	   display.queue_cmds.lock, display.queue_cmds.length,
+	   display.queue_packets.lock, display.queue_packets.length,
 	   display.queue_debug.lock, display.queue_debug.length,
 	   display.queue_frames.lock, display.queue_frames.length);
 
@@ -140,7 +135,7 @@ void init_state() {
   display.window.open = 0;
   display.window.frame = NULL;
 
-  init_queue(&display.queue_cmds);
+  init_queue(&display.queue_packets);
   init_queue(&display.queue_debug);
   init_queue(&display.queue_frames);
 
@@ -183,8 +178,8 @@ void rename_window() {
 	  display.stat.time_elapsed_ms / 1000.0,
 	  display.window.width,
 	  display.window.height,
-	  display.queue_cmds.length,
-	  display.queue_cmds.max_length,
+	  display.queue_packets.length,
+	  display.queue_packets.max_length,
 	  display.queue_debug.length,
 	  display.queue_debug.max_length,
 	  display.queue_frames.length,
@@ -202,7 +197,7 @@ void set_image(const struct video_msg *msg) {
   if(msg->oper == VIDEO_CMD_FRAME_YUYV) {
     acquire_lock(&display.frame.lock);
 
-    debug_f1("[FRAME] frame: raw YUYV, size %d ", msg->size);
+    debug_f1("[FRAME] Input frame: raw YUYV, size %d:\n", msg->size);
     dump_msg_header(msg);
 
     display.frame.size = msg->size;
@@ -249,13 +244,15 @@ void update_frame_stats() {
 }
 
 void process_cmds() {
+  acquire_lock(&display.frame.lock);
+
   resize_fb();
   rename_window();
 
-  // debug_f1("[RENDER] [RECV] Queue R size %d\n", queue_length(&display.queue_cmds));
-
+  queue_purge(&display.queue_packets, process_packet_h264);
   queue_purge_all_but_last(&display.queue_frames, process_packet_yuyv);
-  queue_purge(&display.queue_cmds, process_packet_h264);
+
+  release_lock(&display.frame.lock);
 }
 
 int process_packet_yuyv(const struct video_msg *cmd) {
@@ -282,7 +279,7 @@ int process_packet_yuyv(const struct video_msg *cmd) {
 }
 
 int process_packet_h264(const struct video_msg *cmd) {
-    debug_f3("[RENDER] [RECV] received cmd(%08lXh %08lXh %016lXh)\n",
+    debug_f3("[RENDER] [RECV] Received cmd(%08lXh %08lXh %016lXh):\n",
 	     cmd->oper, cmd->size, (long int)cmd->dptr);
 
     switch(cmd->oper) {
@@ -302,14 +299,17 @@ int process_packet_h264(const struct video_msg *cmd) {
       return 1;
 
     case VIDEO_CMD_SET_WIDTH:
+      debug_f1("[RENDER] [RECV] Frame width set to %d\n", cmd->size);
       resize_window(cmd->size, display.window.height);
       return 1;
 
     case VIDEO_CMD_SET_HEIGHT:
+      debug_f1("[RENDER] [RECV] Frame height set to %d\n", cmd->size);
       resize_window(display.window.width, cmd->size);
       return 1;
 
     case VIDEO_CMD_SET_PITCH:
+      debug_f1("[RENDER] [RECV] Frame pitch set to %d\n", cmd->size);
       display.window.pitch = cmd->size;
       return 1;
 
@@ -356,7 +356,9 @@ void *main_loop(void *dummy) {
 
     if(!display.other.test) {
       debug_f0("[RENDER] live frame\n");
+      acquire_lock(&display.frame.lock);
       render_frame();
+      release_lock(&display.frame.lock);
     }
     else {
       debug_f0("[RENDER] solid color frame\n");
@@ -398,25 +400,6 @@ void resize_window(int msg_width, int msg_height) {
     display.window.width = msg_width;
     display.window.height = msg_height;
     glViewport(0, 0, msg_width, msg_height);
-  }
-}
-
-void clear_msg(struct video_msg *msg) {
-  if(msg->dptr != NULL && msg->size != 0) {
-    debug_f1("[RENDER] Cmd. oper. %016Xh", msg->oper);
-    debug_f1("[RENDER] Cmd. size  %016Xh", msg->size);
-    debug_f1("[RENDER] Cmd. ptr.  %016Xh", (long int)msg->dptr);
-    msg->oper = VIDEO_CMD_WRITE;
-    if(msg->size != 0 && msg->dptr != NULL) {
-      if(display.window.frame != NULL) free(display.window.frame);
-      debug_f1("[RENDER] allocating space for frame at %016Xh\n",
-	       (long int)msg->dptr);
-      display.window.frame = malloc(msg->size);
-      memcpy(display.window.frame, msg->dptr, msg->size);
-      free(msg->dptr);
-      msg->dptr = NULL;
-      msg->size = 0;
-    }
   }
 }
 
@@ -590,8 +573,6 @@ void render_test_frame() {
 
 void resize_fb() {
   if(display.window.glfw_id) {
-    acquire_lock(&display.frame.lock);
-
     int width, height;
     glfwGetFramebufferSize(display.window.glfw_id,
 			   &width,
@@ -615,8 +596,6 @@ void resize_fb() {
 	display.window.height = height;
       }
     }
-
-    release_lock(&display.frame.lock);
   }
 }
 
@@ -640,7 +619,6 @@ void render_frame() {
     return;
   }
 
-  acquire_lock(&display.frame.lock);
 
   debug_f2("[FRAME] using GLFW: OpenGL version %d.%d\n",
 	   glfwGetWindowAttrib(display.window.glfw_id,
@@ -658,7 +636,7 @@ void render_frame() {
 	   display.frame.tex_pitch,
 	   display.frame.tex_size);
 
-  print_messages(&display.queue_cmds, "CTRL ");
+  print_messages(&display.queue_packets, "CTRL ");
   print_messages(&display.queue_debug, "DEBUG");
   print_messages(&display.queue_frames, "VIDEO");
 
@@ -1038,6 +1016,8 @@ void decode_h264_data(const struct video_msg *cmd) {
       debug_f2("[VIDEO] frame %d/%d\n", frame, frame_count);
 
       struct video_msg msg_copy;
+      init_video_msg(&msg_copy);
+
       msg_copy.oper = VIDEO_CMD_FRAME_YUYV;
 
       const int frame_size = h264_decoder.h264_data.frame_sizes[frame];
@@ -1047,16 +1027,16 @@ void decode_h264_data(const struct video_msg *cmd) {
       msg_copy.dptr = malloc(frame_size);
       memcpy(msg_copy.dptr, h264_decoder.h264_data.output[frame], frame_size);
       free(h264_decoder.h264_data.output[frame]);
-      h264_decoder.h264_data.output[frame] = 0;
+      h264_decoder.h264_data.output[frame] = NULL;
 
-      debug_f2("[VIDEO] Decoded frame %d/%d cloned as ", (frame + 1), frame_count);
+      debug_f2("[VIDEO] Decoded frame %d/%d cloned as:\n", (frame + 1), frame_count);
       dump_msg_header(&msg_copy);
       debug_f3("[VIDEO] Message queued (%d/%d) at %016lX\n",
-	       queue_length(&display.queue_cmds),
-	       display.queue_cmds.max_length,
-	       (long int)display.queue_cmds.tail);
+	       queue_length(&display.queue_packets),
+	       display.queue_packets.max_length,
+	       (long int)display.queue_packets.tail);
 
-      queue_push(&display.queue_frames, &msg_copy);
+      queue_push(&display.queue_packets, &msg_copy);
     }
 
     debug_f3("[VIDEO] Decoded packet:"
@@ -1094,7 +1074,7 @@ void receive_partial_h264_packet(const struct video_msg *cmd) {
     }
 
     if(buf_ptr + size < sizeof(buffer)) {
-      debug_f2("[CAPTURE] Storing chunk in buffer (used %d/%d bytes)\n",
+      debug_f2("[CAPTURE] Storing H.264 chunk in buffer (used %d/%d bytes)\n",
 	       buf_ptr + size, sizeof(buffer));
 
       memcpy(buffer + buf_ptr, cmd->dptr, size);
@@ -1114,6 +1094,7 @@ void receive_partial_h264_packet(const struct video_msg *cmd) {
       buf_ptr = size;
 
       decode_h264_data(&temp_msg);
+      free(temp);
 
       debug_f2("[CAPTURE] Storing chunk in buffer (used %d/%d bytes)\n",
 	       size, sizeof(buffer));
@@ -1123,6 +1104,7 @@ void receive_partial_h264_packet(const struct video_msg *cmd) {
       debug_f1("[CAPTURE] Sending large chunk (%d bytes)\n", size);
       start = cmd->size;
       decode_h264_data(cmd);
+      free(cmd->dptr);
     }
 
     start += size;

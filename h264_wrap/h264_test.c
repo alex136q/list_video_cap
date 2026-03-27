@@ -313,7 +313,8 @@ int main(int argc, char **argv) {
     h264_init_encoder(&codec,
 		      codec.frame_config.width,
 		      codec.frame_config.height,
-		      codec.frame_config.colorspace);
+		      codec.frame_config.colorspace,
+		      5);
     parse_h264_cli_args(argc, argv, &codec);
     encode_test_frames(&codec);
     h264_free_encoder(&codec);

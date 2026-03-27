@@ -465,27 +465,15 @@ void stream_frames() {
 
     if(frame_width != prev_width) {
       prev_width = frame_width;
-      struct video_msg size_msg;
-      size_msg.oper = VIDEO_CMD_SET_WIDTH;
-      size_msg.size = frame_width;
-      size_msg.dptr = NULL;
-      video_ctl(size_msg);
+      send_video_packet(VIDEO_CMD_SET_WIDTH, NULL, frame_width);
     }
     if(frame_pitch != prev_pitch) {
       prev_pitch = frame_pitch;
-      struct video_msg size_msg;
-      size_msg.oper = VIDEO_CMD_SET_PITCH;
-      size_msg.size = frame_pitch;
-      size_msg.dptr = NULL;
-      video_ctl(size_msg);
+      send_video_packet(VIDEO_CMD_SET_PITCH, NULL, frame_pitch);
     }
     if(frame_height != prev_height) {
       prev_height = frame_height;
-      struct video_msg size_msg;
-      size_msg.oper = VIDEO_CMD_SET_HEIGHT;
-      size_msg.size = frame_height;
-      size_msg.dptr = NULL;
-      video_ctl(size_msg);
+      send_video_packet(VIDEO_CMD_SET_HEIGHT, NULL, frame_height);
     }
 
     if(frame_width > 0 && frame_height > 0
@@ -556,6 +544,8 @@ void send_frame(unsigned char *ptr, const int length)
 {
   static int sent_headers = 0;
 
+  debug_f1("[CAPTURE] Sending frame: size %d\n", length);
+
   if(display.h264_param.use_h264) {
     if(!sent_headers) {
       send_h264_headers(&h264_encoder);
@@ -574,6 +564,14 @@ void send_frame(unsigned char *ptr, const int length)
       send_video_packet(VIDEO_CMD_FRAME_H264,
 			h264_encoder.h264_data.stream,
 			h264_encoder.h264_data.size);
+
+      if(cli.frame_early_capture_path) {
+	FILE *h264_dump_fd = fopen(cli.frame_early_capture_path, "a");
+	fwrite(h264_encoder.h264_data.stream,
+	       1, h264_encoder.h264_data.size,
+	       h264_dump_fd);
+	fclose(h264_dump_fd);
+      }
 
       if(h264_encoder.h264_data.stream) {
 	free(h264_encoder.h264_data.stream);
@@ -596,11 +594,18 @@ void send_frame(unsigned char *ptr, const int length)
 
 void send_video_packet(int type, void *ptr, long int length) {
   struct video_msg msg;
+  init_video_msg(&msg);
 
   msg.oper = type;
   msg.size = length;
-  msg.dptr = malloc(length);
-  memcpy(msg.dptr, ptr, length);
+
+  if(ptr) {
+    msg.dptr = malloc(length);
+    memcpy(msg.dptr, ptr, length);
+  }
+  else {
+    msg.dptr = NULL;
+  }
 
   video_ctl(msg);
 }
@@ -623,6 +628,12 @@ void send_h264_headers(struct h264_config *config) {
     memcpy(headers_data + ptr,
 	   h264_encoder.h264_data.nals[nal].p_payload,
 	   header_size);
+
+    if(cli.frame_early_capture_path) {
+      FILE *h264_dump_fd = fopen(cli.frame_early_capture_path, "a");
+      fwrite(headers_data + ptr, 1, header_size, h264_dump_fd);
+      fclose(h264_dump_fd);
+    }
 
     ptr += header_size;
   }

@@ -1,5 +1,7 @@
 #include "headers.h"
 
+static int wait_on_full_queue = 0;
+
 
 void init_queue(struct queue *stk) {
   stk->lock = 1;
@@ -15,12 +17,18 @@ int queue_empty(struct queue *stk) {
 }
 
 void queue_push(struct queue *stk, struct video_msg *data) {
+  if(stk->tail && stk->tail->id >= data->id) {
+    debug_f0("[QUEUE] Message is late\n");
+  }
+
   acquire_lock(&stk->lock);
-  if(stk->length >= stk->max_length) {
+
+  if(stk->length >= stk->max_length && wait_on_full_queue) {
     release_lock(&stk->lock);
     acquire_lock(&stk->lock);
   }
   queue_push_unsafe(stk, data);
+
   release_lock(&stk->lock);
 }
 
