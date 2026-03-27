@@ -46,7 +46,8 @@ Run `./list_video_cap help` for a summary of the supported commands and their ar
     Flags:
 
     -c
-	    Fallback to raw frame data channel. The absence of this flag
+            Fallback to raw frame data channel. Defaults to buffered streaming.
+            of H.264 packets.
 
     -I <count>
 	    Keyframe interval (maximum frame count).
