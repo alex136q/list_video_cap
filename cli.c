@@ -82,15 +82,15 @@ void show_help_text() {
 	   "\t\t-F diag\t\tFill main diagonal.\n"
 	   "\t\t-F horiz\tFill two lines.\n"
 	   "\n-T <type>\n\tApply transforms to the frames to be rendered:\n"
-	   "\t\t-T flip_v\t\tFlip along the vertical axis (up/down).\n"
-	   "\t\t-T flip_h\t\tFlip along the horizontal axis (left/right).\n"
-	   "\t\t-T gray\tConvert to grayscale (skip YUV to RGBA conversion).\n"
-	   "\t\t-T invert\t\tNegate RGB color.\n"
+	   "\t\t-T flip_v\tFlip along the vertical axis (up/down).\n"
+	   "\t\t-T flip_h\tFlip along the horizontal axis (left/right).\n"
+	   "\t\t-T gray\t\tConvert to grayscale (skip YUV to RGBA conversion).\n"
+	   "\t\t-T invert\tNegate RGB color.\n"
 	   "\n-M <type>\n\tSet YUV to RGB transformation parameters:\n"
-	   "\t\t-M BT601\t\tAs with PAL.\n"
-	   "\t\t-M BT709\t\tAs for sRGB.\n"
+	   "\t\t-M BT601\tAs with PAL.\n"
+	   "\t\t-M BT709\tAs for sRGB.\n"
 	   "\t\t-M JPEG\t\tSame as JPEG.\n"
-	   "\t\t-M custom\t\tExperimental setting.\n");
+	   "\t\t-M custom\tExperimental matrix (default).\n");
 }
 
 void populate_cli_arguments(int argc, char **argv) {

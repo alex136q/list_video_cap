@@ -35,7 +35,7 @@ Run `./list_video_cap help` for a summary of the supported commands and their ar
 	    Lists only the capabilities of the given input and device.
 
     ./list_video_cap save -d <path> -i <integer> -o <path>
-		Save a single frame as grayscale (Y' component).
+	    Save a single frame as grayscale (Y' component).
 
     ./list_video_cap watch -d <path> -i <integer>
 	    Opens a window displaying the camera feed.
@@ -44,9 +44,12 @@ Run `./list_video_cap help` for a summary of the supported commands and their ar
 
     -c
 	    Fallback to raw frame data channel. The absence of this flag
+
+    -I <count>
+	    Keyframe interval (maximum frame count).
 	    causes the application to stream H.264-encoded packets.
 
-    -k <SIZE>
+    -k <size>
 	    Size of the H.264 packets to be streamed to the graphics thread.
 
     -f <FPS>
@@ -73,6 +76,12 @@ Run `./list_video_cap help` for a summary of the supported commands and their ar
     -m
 	    Show memory dumps in debug messages.
 
+    -o <PATH>
+	    Capture file for the encoded stream on the decoder side.
+
+    -O <PATH>
+	    Capture file for the encoded stream on the encoder side.
+
     -t
 	    Test OpenGL by rendering dummy frames.
 
@@ -86,15 +95,22 @@ Run `./list_video_cap help` for a summary of the supported commands and their ar
 
     -T <type>
 	    Apply transforms to the frames to be rendered:
-		    -T flip_v		Flip along the vertical axis (up/down).
-		    -T flip_h		Flip along the horizontal axis (left/right).
-		    -T gray     	Convert to grayscale (skip YUV to RGBA conversion).
-		    -T invert		Negate RGB color.
+		    -T flip_v	Flip along the vertical axis (up/down).
+		    -T flip_h	Flip along the horizontal axis (left/right).
+		    -T gray		Convert to grayscale (skip YUV to RGBA conversion).
+		    -T invert	Negate RGB color.
+
+    -M <type>
+	    Set YUV to RGB transformation parameters:
+		    -M BT601	As with PAL.
+		    -M BT709	As for sRGB.
+		    -M JPEG		Same as JPEG.
+		    -M custom	Experimental matrix (default).
 
 Other files
 -----------
 
 `extract_yuyv_y.py <PATH>` when run will write the bytes in even positions (Y' values) from `<PATH>` into `<PATH>.luma`. These are to be interpreted as a grayscale bitmap which can further be processed; `h264_test` passes `<PATH>.luma` files through `magick` (ImageMagick) to convert them to PNG files in the `h264_test_data/` folder.
 
-`h264_test` is meant to try out `libx264`; it generates sample YUV 4:2:2 bitmaps and uses `libx264` to build a H.264 stream of frames from them. The `nals.bin` output it generates on encoding the test frames is a raw H.264 data stream that can be played with applications like `mpv` or converted to other formats with `ffmpeg`.
+`h264_test` is meant to try out `libx264`; it generates sample YUV 4:2:2 bitmaps and uses `libx264` to build a H.264 stream of frames from them. The `nals.bin` output it generates on encoding the test frames is a raw H.264 data stream that can be played with applications like `mpv` or converted to other formats with `ffmpeg`. The same applies to ".bin" files output by `list_video_cap`.
 
