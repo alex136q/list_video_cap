@@ -520,6 +520,7 @@ void stream_frames() {
     wait_for_capture(video_devfd, &buf_s, buf_data_ptr, 0);
 
     if(buf_s.length) {
+      ++display.stat.frames_captured;
       debug_f0("[CAPTURE] Sending frame...\n");
       unsigned char *data_ptr = malloc(buf_s.length);
       memcpy(data_ptr, buf_data_ptr, buf_s.length);
@@ -588,8 +589,6 @@ void send_frame(unsigned char *ptr, const int length)
     /* send raw YUYV frame data */
     send_video_packet(VIDEO_CMD_FRAME_YUYV, ptr, length);
   }
-
-  ++display.stat.frames_captured;
 }
 
 void send_video_packet(int type, void *ptr, long int length) {

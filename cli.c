@@ -33,12 +33,6 @@ void handle_cli_cmd() {
     toggle_graphics(0);
   }
   else if(strcmp(cli.cmd, "watch") == 0) {
-    send_video_packet(VIDEO_CMD_SET_ARGC, NULL, 1);
-    for(int arg = 0; arg < 1; ++arg) {
-      debug_f1("Passing argv[%d]", arg);
-      debug_s1(" \"%s\"...\n", cli.argv[arg]);
-      send_video_packet(VIDEO_CMD_SET_ARGV, cli.argv[arg], arg);
-    }
     toggle_graphics(1);
     stream_frames();
     toggle_graphics(0);
@@ -72,8 +66,8 @@ void show_help_text() {
 	   "\n-R\n\tAllow window to be resized by the user.\n"
 	   "\n-b\n\tShow a border around the video feed.\n"
 	   "\n-m\n\tShow memory dumps in debug messages.\n"
-	   "\n-o <PATH>\n\tCapture file for the encoded stream on the decoder side.\n"
-	   "\n-O <PATH>\n\tCapture file for the encoded stream on the encoder side.\n"
+	   "\n-o <path>\n\tCapture file for the encoded stream on the decoder side.\n"
+	   "\n-O <path>\n\tCapture file for the encoded stream on the encoder side.\n"
 	   "\n-t\n\tTest OpenGL by rendering dummy frames.\n"
 	   "\n-F <type>\n\tOverlay solid color patterns over the captured frame (can be combined):\n"
 	   "\t\t-F full\t\tFill whole frame.\n"
@@ -94,11 +88,9 @@ void show_help_text() {
 }
 
 void populate_cli_arguments(int argc, char **argv) {
-  cli.argc = argc;
-  cli.argv = argv;
   cli.cmd = NULL;
-  cli.video_dev_path = NULL;
-  cli.video_dev_input = -1;
+  cli.video_dev_path = "/dev/video0";
+  cli.video_dev_input = 0;
   cli.frame_capture_path = NULL;
   cli.frame_early_capture_path = NULL;
 

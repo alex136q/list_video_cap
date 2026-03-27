@@ -43,8 +43,6 @@ struct display_config {
   struct queue queue_frames;
 
   struct {
-    int argc;
-    char **argv;
     unsigned int frame_delay_ms;
     int test;
   } other;

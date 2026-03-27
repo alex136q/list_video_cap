@@ -19,7 +19,7 @@ void receive_partial_h264_packet(const struct video_msg *cmd);
 
 
 void video_ctl(struct video_msg cmd) {
-  debug_f0("[VIDEO] [video_ctl] Got packet\n"); dump_msg_header(&cmd);
+  debug_f0("[VIDEO] [video_ctl] Got packet: "); dump_msg_header(&cmd);
 
   dump_queue_sizes();
 
@@ -41,18 +41,6 @@ void video_ctl(struct video_msg cmd) {
     h264_init_decoder(&h264_decoder);
     h264_decoder.debug_info = h264_encoder.debug_info;
     h264_decoder.dump_bytes = h264_encoder.dump_bytes;
-  }
-  else if(cmd.oper == VIDEO_CMD_SET_ARGC) {
-    /* required by GLUT in the previous iteration */
-    debug_f1("[VIDEO] [video_ctl] set argc = %d\n", cmd.size);
-    display.other.argc = cmd.size;
-    display.other.argv = (char **)calloc(sizeof(char *), cmd.size);
-  }
-  else if(cmd.oper == VIDEO_CMD_SET_ARGV) {
-    /* required by GLUT in the previous iteration */
-    debug_f1("[VIDEO] [video_ctl] set argv[%d]\n", cmd.size);
-    display.other.argv[cmd.size] = malloc(strlen(cmd.dptr));
-    strcpy(display.other.argv[cmd.size], cmd.dptr);
   }
   else if(cmd.oper == VIDEO_CMD_SET_HEIGHT) {
     display.frame.height = cmd.size;
