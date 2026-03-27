@@ -60,7 +60,7 @@ void show_help_text() {
 	   "\n./list_video_cap replay -L <path>\n\tOpens a window displaying the camera feed previously written to a file.\n"
 	   "\n"
 	   "Flags:\n"
-	   "\n-c\n\tFallback to raw camera capture frame data channel.\n
+	   "\n-c\n\tFallback to raw camera capture frame data channel.\n"
 	   "\tDefaults to buffered streaming of H.264 packets.\n"
 	   "\n-I <count>\n\tKeyframe interval (maximum frame count).\n"
 	   "\n-k <size>\n\tSize of the H.264 packets to be streamed to the graphics thread.\n"
