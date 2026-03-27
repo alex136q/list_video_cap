@@ -40,6 +40,9 @@ Run `./list_video_cap help` for a summary of the supported commands and their ar
     ./list_video_cap watch -d <path> -i <integer>
 	    Opens a window displaying the camera feed.
 
+    ./list_video_cap replay -L <path>
+	    Opens a window displaying the camera feed previously written to a file.
+
     Flags:
 
     -c
@@ -76,11 +79,14 @@ Run `./list_video_cap help` for a summary of the supported commands and their ar
     -m
 	    Show memory dumps in debug messages.
 
-    -o <PATH>
+    -o <path>
 	    Capture file for the encoded stream on the decoder side.
 
-    -O <PATH>
+    -O <path>
 	    Capture file for the encoded stream on the encoder side.
+
+    -L <path>
+	    Capture file to replay.
 
     -t
 	    Test OpenGL by rendering dummy frames.
