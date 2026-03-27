@@ -43,10 +43,10 @@ void video_ctl(struct video_msg cmd) {
     h264_decoder.dump_bytes = h264_encoder.dump_bytes;
   }
   else if(cmd.oper == VIDEO_CMD_SET_HEIGHT) {
-    display.frame.height = cmd.size;
+    display.window.height = display.frame.height = cmd.size;
   }
   else if(cmd.oper == VIDEO_CMD_SET_WIDTH) {
-    display.frame.width = cmd.size;
+    display.window.width = display.frame.width = cmd.size;
   }
   else if(cmd.oper == VIDEO_CMD_SET_PITCH) {
     display.frame.pitch = cmd.size;
@@ -107,7 +107,7 @@ void print_messages(struct queue *stk, const char *debug_label) {
   memset(buf, 0, sizeof(buf));
 
   sprintf(buf,
-	  "[VIDEO] Queue sizes: R%d %04Xh, W%d %04Xh, F%d %04Xh\n",
+	  "[VIDEO] Queue sizes: C%d %04Xh, D%d %04Xh, F%d %04Xh\n",
 	   display.queue_packets.lock, display.queue_packets.length,
 	   display.queue_debug.lock, display.queue_debug.length,
 	   display.queue_frames.lock, display.queue_frames.length);
@@ -158,7 +158,7 @@ void rename_window() {
 
   sprintf(window_title,
 	  "Stream: %6.2lf FPSr (%ld), %6.2lf FPSc (%ld), %.2lf s, "
-	  "Win. %dx%d, R %d/%d W %d/%d F %d/%d",
+	  "Win. %dx%d, Frm. %dx%d, R %d/%d W %d/%d F %d/%d",
 	  display.stat.render_frame_rate_fps,
 	  display.stat.frames_rendered,
 	  display.stat.capture_frame_rate_fps,
@@ -166,6 +166,8 @@ void rename_window() {
 	  display.stat.time_elapsed_ms / 1000.0,
 	  display.window.width,
 	  display.window.height,
+	  display.frame.width,
+	  display.frame.height,
 	  display.queue_packets.length,
 	  display.queue_packets.max_length,
 	  display.queue_debug.length,
@@ -562,6 +564,7 @@ void render_test_frame() {
 void resize_fb() {
   if(display.window.glfw_id) {
     int width, height;
+
     glfwGetFramebufferSize(display.window.glfw_id,
 			   &width,
 			   &height);
@@ -578,9 +581,9 @@ void resize_fb() {
       }
       else {
 	glViewport(0, 0, width, height);
-
 	glfwGetWindowSize(display.window.glfw_id, &width, &height);
 	display.window.width = width;
+	display.window.pitch = width * 2;
 	display.window.height = height;
       }
     }
@@ -996,6 +999,10 @@ void decode_h264_data(const struct video_msg *cmd) {
 
     h264_decode_frame(&h264_decoder, cmd->dptr, cmd->size);
 
+    display.frame.width = h264_decoder.frame_config.width;
+    display.frame.height = h264_decoder.frame_config.height;
+    display.frame.pitch = h264_decoder.frame_config.scanline_length;
+
     long int total_size = 0;
 
     const int frame_count = h264_decoder.h264_data.output_frames;
@@ -1089,6 +1096,14 @@ void receive_partial_h264_packet(const struct video_msg *cmd) {
       memcpy(buffer, cmd->dptr, size);
     }
     else {
+      if(buf_ptr > 0) {
+	debug_f1("[CAPTURE] Sending current buffer (%d bytes)\n", buf_ptr);
+	struct video_msg buf_cmd;
+	buf_cmd.size = buf_ptr;
+	buf_cmd.dptr = buffer;
+	buf_cmd.oper = VIDEO_CMD_FRAME_H264;
+	decode_h264_data(&buf_cmd);
+      }
       debug_f1("[CAPTURE] Sending large chunk (%d bytes)\n", size);
       start = cmd->size;
       decode_h264_data(cmd);

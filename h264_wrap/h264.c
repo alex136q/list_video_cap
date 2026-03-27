@@ -288,7 +288,8 @@ void h264_decode_frame_internal(struct h264_config *config) {
     config->frame_config.width  = config->frame->width;
     config->frame_config.height = config->frame->height;
     /* wrapper adds no padding bytes at the end of scanlines */
-    config->frame_config.size   = config->frame->width * config->frame->height * 2;
+    config->frame_config.scanline_length  = config->frame->linesize[0] * 2;
+    config->frame_config.size   = config->frame_config.scanline_length * config->frame->height;
 
     config->frame_config.scanline_length = config->frame->width << 1;
     config->frame_config.luma_length     = config->frame->width;

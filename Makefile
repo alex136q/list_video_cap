@@ -7,6 +7,9 @@ all: build_list_video_cap build_h264_wrap
 build_list_video_cap: build_h264_wrap
 	$(CC) $(CCFLAGS) -o list_video_cap *.c h264_wrap/h264.a
 
+profile_build_list_video_cap: build_h264_wrap
+	$(CC) $(CCFLAGS) -pg -o list_video_cap *.c h264_wrap/h264.a
+
 build_h264_wrap:
 	make -C h264_wrap
 
