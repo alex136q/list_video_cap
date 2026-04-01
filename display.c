@@ -1,6 +1,7 @@
 #include "headers.h"
 
 extern struct cli_args cli;
+extern struct debug_config debug_cfg;
 
 struct display_config display;
 
@@ -54,10 +55,20 @@ void video_ctl(struct video_msg cmd) {
   else if(cmd.oper == VIDEO_CMD_FRAME_YUYV
 	  || cmd.oper == VIDEO_CMD_FRAME_H264) {
     if(cli.frame_capture_path != NULL && cmd.oper == VIDEO_CMD_FRAME_H264) {
+      debug_f1("[VIDEO] [video_ctl] Dumping packet, %d bytes\n", cmd.size);
       debug_s1("[VIDEO] [video_ctl] Dumping packet into %s\n", cli.frame_capture_path);
       FILE *h264_dump_fd = fopen(cli.frame_capture_path, "a");
       fwrite(cmd.dptr, 1, cmd.size, h264_dump_fd);
       fclose(h264_dump_fd);
+    }
+
+    if(debug_cfg.show_memory_dump) {
+      debug_f0("[VIDEO] Packet data:\n");
+      struct video_msg dummy;
+      dummy.oper = VIDEO_CMD_FRAME_H264;
+      dummy.size = h264_encoder.h264_data.size;
+      dummy.dptr = h264_encoder.h264_data.stream;
+      dump_msg(&dummy);
     }
 
     struct video_msg *msg_copy = alloc_video_msg();
@@ -240,7 +251,8 @@ void process_cmds() {
   rename_window();
 
   queue_purge(&display.queue_packets, process_packet_h264);
-  queue_purge_all_but_last(&display.queue_frames, process_packet_yuyv);
+  // queue_purge_all_but_last(&display.queue_frames, process_packet_yuyv);
+  queue_purge(&display.queue_frames, process_packet_yuyv);
 
   release_lock(&display.frame.lock);
 }
@@ -765,18 +777,6 @@ void apply_test_patterns(unsigned char *rgba_image) {
 }
 
 void blit_rgba_image(unsigned char *ptr) {
-  if(cli.frame_capture_path) {
-    FILE *img = fopen(cli.frame_capture_path, "w");
-    fwrite(ptr, display.frame.tex_size, 1, img);
-    fclose(img);
-    debug_f4("[GL] dumped image into texture.bin\n"
-	     "[GL] W=%d H=%d P=%d L=%d\n",
-	     display.frame.tex_width,
-	     display.frame.tex_height,
-	     display.frame.tex_pitch,
-	     display.frame.tex_size);
-  }
-
   static const char *vs_src =
     "#version 460 core\n"
     "precision highp float;\n"
@@ -1031,7 +1031,7 @@ void decode_h264_data(const struct video_msg *cmd) {
 	       display.queue_packets.max_length,
 	       (long int)display.queue_packets.tail);
 
-      queue_push(&display.queue_packets, &msg_copy);
+      queue_push(&display.queue_frames, &msg_copy);
     }
 
     debug_f3("[VIDEO] Decoded packet:"
