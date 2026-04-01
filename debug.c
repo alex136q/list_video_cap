@@ -63,9 +63,6 @@ void debug_f0(const char *template) {
   memset(debug_msg.dptr, 0, debug_buffer_size);
   snprintf((char *)debug_msg.dptr, debug_buffer_size - 1, template);
   debug_msg.size = strlen(debug_msg.dptr);
-  if(debug_cfg.show_memory_dump) {
-    dump_msg(&debug_msg);
-  }
   printf(debug_msg.dptr);
   free(debug_msg.dptr);
 }
@@ -91,7 +88,7 @@ void dump_msg(const struct video_msg *msg) {
 	b < bytes_per_mem_dump_line
 	  && ptr + b < msg->size;
 	++b) {
-	printf(" %02X", (const int)*(char *)(msg->dptr + ptr + b));
+	printf(" %02X", (const unsigned char)*(char *)(msg->dptr + ptr + b));
       }
     printf("\n");
   }
