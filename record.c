@@ -2,6 +2,7 @@
 
 extern struct cli_args cli;
 extern struct display_config display;
+extern struct debug_config debug_cfg;
 
 struct h264_config h264_encoder;
 
@@ -561,18 +562,28 @@ void send_frame(unsigned char *ptr, const int length)
 	       h264_encoder.h264_data.size,
 	       (long int)h264_encoder.h264_data.stream);
 
-      debug_f1("[CAPTURE] Streaming %d bytes...\n", h264_encoder.h264_data.size);
-      send_video_packet(VIDEO_CMD_FRAME_H264,
-			h264_encoder.h264_data.stream,
-			h264_encoder.h264_data.size);
-
       if(cli.frame_early_capture_path) {
+	debug_s1("[CAPTURE] Dumping packet into %s\n", cli.frame_early_capture_path);
 	FILE *h264_dump_fd = fopen(cli.frame_early_capture_path, "a");
 	fwrite(h264_encoder.h264_data.stream,
 	       1, h264_encoder.h264_data.size,
 	       h264_dump_fd);
 	fclose(h264_dump_fd);
       }
+
+      if(debug_cfg.show_memory_dump) {
+	debug_f0("[CAPTURE] Packet data:\n");
+	struct video_msg dummy;
+	dummy.oper = VIDEO_CMD_FRAME_H264;
+	dummy.size = h264_encoder.h264_data.size;
+	dummy.dptr = h264_encoder.h264_data.stream;
+	dump_msg(&dummy);
+      }
+
+      debug_f1("[CAPTURE] Streaming %d bytes...\n", h264_encoder.h264_data.size);
+      send_video_packet(VIDEO_CMD_FRAME_H264,
+			h264_encoder.h264_data.stream,
+			h264_encoder.h264_data.size);
 
       if(h264_encoder.h264_data.stream) {
 	free(h264_encoder.h264_data.stream);
@@ -628,13 +639,14 @@ void send_h264_headers(struct h264_config *config) {
 	   h264_encoder.h264_data.nals[nal].p_payload,
 	   header_size);
 
-    if(cli.frame_early_capture_path) {
-      FILE *h264_dump_fd = fopen(cli.frame_early_capture_path, "a");
-      fwrite(headers_data + ptr, 1, header_size, h264_dump_fd);
-      fclose(h264_dump_fd);
-    }
-
     ptr += header_size;
+  }
+
+  if(cli.frame_early_capture_path) {
+    debug_f1("[CAPTURE] Dumping H.264 headers: size %ld bytes\n", headers_size);
+    FILE *h264_dump_fd = fopen(cli.frame_early_capture_path, "a");
+    fwrite(headers_data, 1, ptr, h264_dump_fd);
+    fclose(h264_dump_fd);
   }
 
   debug_f1("[CAPTURE] Sending H.264 headers: size %ld bytes\n", headers_size);
