@@ -388,7 +388,7 @@ void resize_window(int msg_width, int msg_height) {
   int width, height;
   glfwGetWindowSize(display.window.glfw_id, &width, &height);
 
-  if(width != msg_width || height != msg_height) {
+  if((width != msg_width || height != msg_height) && msg_width && msg_height) {
     debug_f2("[RENDER] Resize window to %dx%d\n", msg_width, msg_height);
 
     if(display.window.fixed_size) {
