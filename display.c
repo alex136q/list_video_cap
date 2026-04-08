@@ -13,6 +13,8 @@ extern struct yuv_matrix yuv_rgb;
 #define stream_h264_buffer_size 4096
 
 
+void configure_texture_size(int width, int height);
+
 void apply_test_patterns(unsigned char *rgba_image);
 
 void decode_h264_data(const struct video_msg *cmd);
@@ -251,8 +253,13 @@ void process_cmds() {
   rename_window();
 
   queue_purge(&display.queue_packets, process_packet_h264);
-  // queue_purge_all_but_last(&display.queue_frames, process_packet_yuyv);
-  queue_purge(&display.queue_frames, process_packet_yuyv);
+
+  if(display.stat.render_frame_rate_fps < display.stat.capture_frame_rate_fps) {
+    queue_purge_all_but_last(&display.queue_frames, process_packet_yuyv);
+  }
+  else {
+    queue_purge(&display.queue_frames, process_packet_yuyv);
+  }
 
   release_lock(&display.frame.lock);
 }
@@ -405,10 +412,7 @@ void resize_window(int msg_width, int msg_height) {
   }
 }
 
-unsigned char *yuyv_to_gray(unsigned char *ptr,
-			    int pitch,
-			    int width,
-			    int height) {
+void configure_texture_size(int width, int height) {
   int k;
 
   for(k = 1; k < width; k = k << 1);
@@ -427,6 +431,21 @@ unsigned char *yuyv_to_gray(unsigned char *ptr,
   display.frame.tex_pitch = display.frame.tex_width * 4;
   display.frame.tex_size = display.frame.tex_pitch * display.frame.tex_height;
 
+  debug_f4("[VIDEO] [RGBA] frame   size %dx%d pitch %d size %ld\n",
+	   display.frame.width, display.frame.height,
+	   display.frame.pitch, display.frame.size);
+
+  debug_f4("[VIDEO] [RGBA] texture size %dx%d pitch %d size %ld\n",
+	   display.frame.tex_width, display.frame.tex_height,
+	   display.frame.tex_pitch, display.frame.tex_size);
+}
+
+unsigned char *yuyv_to_gray(unsigned char *ptr,
+			    int pitch,
+			    int width,
+			    int height) {
+
+  configure_texture_size(width, height);
   unsigned char *gray = malloc(display.frame.tex_size);
 
   int row;
@@ -469,32 +488,8 @@ unsigned char *yuyv_to_rgba(unsigned char *ptr,
 			    int pitch,
 			    int width,
 			    int height) {
-  int k;
 
-  for(k = 1; k < width; k = k << 1);
-  display.frame.tex_width = k;
-
-  for(k = 1; k < height; k = k << 1);
-  display.frame.tex_height = k;
-
-  if(display.frame.tex_width > display.frame.tex_height) {
-    display.frame.tex_height = display.frame.tex_width;
-  }
-  else if(display.frame.tex_height > display.frame.tex_width) {
-    display.frame.tex_width = display.frame.tex_height;
-  }
-
-  display.frame.tex_pitch = display.frame.tex_width * 4;
-  display.frame.tex_size = display.frame.tex_pitch * display.frame.tex_height;
-
-  debug_f4("[VIDEO] [RGBA] frame   size %dx%d pitch %d size %ld\n",
-	   display.frame.width, display.frame.height,
-	   display.frame.pitch, display.frame.size);
-
-  debug_f4("[VIDEO] [RGBA] texture size %dx%d pitch %d size %ld\n",
-	   display.frame.tex_width, display.frame.tex_height,
-	   display.frame.tex_pitch, display.frame.tex_size);
-
+  configure_texture_size(width, height);
   unsigned char *rgba = malloc(display.frame.tex_size);
 
   int row;

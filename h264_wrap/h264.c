@@ -314,7 +314,7 @@ void h264_decode_frame_internal(struct h264_config *config) {
     if(config->debug_info) {
       for(int k = 0; k < AV_NUM_DATA_POINTERS; ++k) {
 	if(config->debug_info)
-	printf("[H264] [DEC] Frame: plane %02Xh size %08Xh ptr %016lXh\n",
+	printf("[H264] [DEC] Frame: plane %02Xh pitch %08Xh ptr %016lXh\n",
 	       k, config->frame->linesize[k], (long int)config->frame->data[k]);
       }
     }
@@ -353,7 +353,7 @@ void h264_decode_frame_internal(struct h264_config *config) {
       memset(config->frame_planes.packed, 0, output_frame_size);
 
       if(config->dump_bytes)
-      printf("[H264] [DEC] Copying Y  data to offset %08Xh, size %08Xh\n",
+      printf("[H264] [DEC] Copying Y  data to offset %08Xh, pitch %08Xh\n",
 	     0, config->frame_config.luma_length);
 
       if(config->frame->data[0]) {
@@ -366,7 +366,7 @@ void h264_decode_frame_internal(struct h264_config *config) {
       }
 
       if(config->dump_bytes)
-      printf("[H264] [DEC] Copying Cb data to offset %08Xh, size %08Xh\n",
+      printf("[H264] [DEC] Copying Cb data to offset %08Xh, pitch %08Xh\n",
 	     1, config->frame_config.chroma_b_length);
 
       if(config->frame->data[1]) {
@@ -379,7 +379,7 @@ void h264_decode_frame_internal(struct h264_config *config) {
       }
 
       if(config->dump_bytes)
-      printf("[H264] [DEC] Copying Cr data to offset %08Xh, size %08Xh\n",
+      printf("[H264] [DEC] Copying Cr data to offset %08Xh, pitch %08Xh\n",
 	     3, config->frame_config.chroma_r_length);
 
       if(config->frame->data[2]) {
