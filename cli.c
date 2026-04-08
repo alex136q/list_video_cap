@@ -74,6 +74,7 @@ void show_help_text() {
 	   "\n-m\n\tShow memory dumps in debug messages.\n"
 	   "\n-o <path>\n\tCapture file for the encoded stream on the decoder side.\n"
 	   "\n-O <path>\n\tCapture file for the encoded stream on the encoder side.\n"
+	   "\n-J <path>\n\tFile to save the latest decoded YUYV frame to.\n"
 	   "\n-L <path>\n\tCapture file to replay.\n"
 	   "\n-t\n\tTest OpenGL by rendering dummy frames.\n"
 	   "\n-F <type>\n\tOverlay solid color patterns over the captured frame (can be combined):\n"
@@ -102,6 +103,7 @@ void populate_cli_arguments(int argc, char **argv) {
   cli.frame_capture_path = NULL;
   cli.frame_early_capture_path = NULL;
   cli.frame_replay_path = NULL;
+  cli.output_frame_dump_path = NULL;
 
   debug_cfg.show_memory_dump = 0;
 
@@ -134,25 +136,28 @@ void populate_cli_arguments(int argc, char **argv) {
 
 
   for(int arg = 2; arg < argc; ++arg) {
-    if(strcmp(argv[arg], "-d") == 0) {
+    if(strcmp(argv[arg], "-d") == 0 && argc > arg) {
       cli.video_dev_path = argv[++arg];
     }
-    else if(strcmp(argv[arg], "-o") == 0) {
+    else if(strcmp(argv[arg], "-o") == 0 && argc > arg) {
       cli.frame_capture_path = argv[++arg];
       char cmd[1024];
       sprintf(cmd, "rm \"%s\"", cli.frame_capture_path);
       system(cmd);
     }
-    else if(strcmp(argv[arg], "-O") == 0) {
+    else if(strcmp(argv[arg], "-O") == 0 && argc > arg) {
       cli.frame_early_capture_path = argv[++arg];
       char cmd[1024];
       sprintf(cmd, "rm \"%s\"", cli.frame_early_capture_path);
       system(cmd);
     }
-    else if(strcmp(argv[arg], "-L") == 0) {
+    else if(strcmp(argv[arg], "-J") == 0 && argc > arg) {
+      cli.output_frame_dump_path = argv[++arg];
+    }
+    else if(strcmp(argv[arg], "-L") == 0 && argc > arg) {
       cli.frame_replay_path = argv[++arg];
     }
-    else if(strcmp(argv[arg], "-i") == 0) {
+    else if(strcmp(argv[arg], "-i") == 0 && argc > arg) {
       cli.video_dev_input = atoi(argv[++arg]);
     }
     else if(strcmp(argv[arg], "-m") == 0) {
@@ -232,6 +237,7 @@ void populate_cli_arguments(int argc, char **argv) {
       show_cli_error_text(arg, argc, argv);
     }
   }
+
   h264_init_encoder(&h264_encoder,
 		    display.capture.req_width,
 		    display.capture.req_height,

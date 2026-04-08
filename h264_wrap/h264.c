@@ -396,6 +396,14 @@ void h264_decode_frame_internal(struct h264_config *config) {
 	dump_array(config->frame_planes.packed, 0x40);
       }
 
+      if(config->output_frame_dump_path) {
+	FILE *yuyv_file = fopen(config->output_frame_dump_path, "w");
+	fwrite(config->frame_planes.packed,
+	       1, config->frame->linesize[0] * 2 * config->frame->height,
+	       yuyv_file);
+	fclose(yuyv_file);
+      }
+
       config->h264_data.output[config->h264_data.output_frames] =
 	config->frame_planes.packed;
 

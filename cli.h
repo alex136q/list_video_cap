@@ -8,6 +8,7 @@ struct cli_args {
   char *frame_capture_path;
   char *frame_early_capture_path;
   char *frame_replay_path;
+  char *output_frame_dump_path;
 };
 
 int main(int argc, char **argv);

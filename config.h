@@ -20,7 +20,7 @@ struct display_config {
     int width;
     int pitch;
     int height;
-    const char *title_string;
+    unsigned char *title_string;
     int fixed_size;
     int enable_border;
     int open;

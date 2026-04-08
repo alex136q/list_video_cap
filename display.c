@@ -44,6 +44,7 @@ void video_ctl(struct video_msg cmd) {
     h264_init_decoder(&h264_decoder);
     h264_decoder.debug_info = h264_encoder.debug_info;
     h264_decoder.dump_bytes = h264_encoder.dump_bytes;
+    h264_decoder.output_frame_dump_path = cli.output_frame_dump_path;
   }
   else if(cmd.oper == VIDEO_CMD_SET_HEIGHT) {
     display.window.height = display.frame.height = cmd.size;
@@ -346,7 +347,7 @@ void *main_loop(void *dummy) {
   display.window.glfw_id =
     glfwCreateWindow(display.window.width,
 		     display.window.height,
-		     display.window.title_string,
+		     (const char *)display.window.title_string,
 		     NULL, NULL);
 
   display.window.open = 1;

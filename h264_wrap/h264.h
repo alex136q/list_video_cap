@@ -68,6 +68,7 @@ struct h264_config {
   /* debug */
   int debug_info;
   int dump_bytes;
+  unsigned char *output_frame_dump_path;
 };
 
 
