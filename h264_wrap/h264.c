@@ -348,7 +348,7 @@ void h264_decode_frame_internal(struct h264_config *config) {
     else if(yuv422p) {
       if(config->debug_info) printf("[H264] [DEC] Decoding YUV 4:2:2 planar frame\n");
 
-      long int output_frame_size = config->frame->height * config->frame->width * 4;
+      long int output_frame_size = config->frame->height * config->frame->width * 2;
       config->frame_planes.packed = malloc(output_frame_size);
       memset(config->frame_planes.packed, 0, output_frame_size);
 
@@ -361,6 +361,8 @@ void h264_decode_frame_internal(struct h264_config *config) {
 		   config->frame->linesize[0] * config->frame->height,
 		   0, 2,
 		   config->frame_planes.packed);
+
+	if(config->dump_bytes) dump_array(config->frame->data[0], 0x20);
       }
 
       if(config->dump_bytes)
@@ -372,6 +374,8 @@ void h264_decode_frame_internal(struct h264_config *config) {
 		   config->frame->linesize[1] * config->frame->height,
 		   1, 4,
 		   config->frame_planes.packed);
+
+	if(config->dump_bytes) dump_array(config->frame->data[1], 0x10);
       }
 
       if(config->dump_bytes)
@@ -381,8 +385,15 @@ void h264_decode_frame_internal(struct h264_config *config) {
       if(config->frame->data[2]) {
 	pack_array(config->frame->data[2],
 		   config->frame->linesize[2] * config->frame->height,
-		   2, 4,
+		   3, 4,
 		   config->frame_planes.packed);
+
+	if(config->dump_bytes) dump_array(config->frame->data[2], 0x10);
+      }
+
+      if(config->dump_bytes) {
+	printf("[H264] [DEC] Assembled YUYV frame has header:\n");
+	dump_array(config->frame_planes.packed, 0x40);
       }
 
       config->h264_data.output[config->h264_data.output_frames] =
@@ -391,11 +402,12 @@ void h264_decode_frame_internal(struct h264_config *config) {
       config->h264_data.frame_sizes[config->h264_data.output_frames] =
 	config->frame->linesize[0] * 2 * config->frame->height;
 
-      ++config->h264_data.output_frames;
-
       if(config->debug_info)
-      printf("[H264] [DEC] Decoded frame of size %dx%d\n",
-	     config->frame->width, config->frame->height);
+      printf("[H264] [DEC] Decoded frame of size %dx%d, %d bytes\n",
+	     config->frame->width, config->frame->height,
+	     config->h264_data.frame_sizes[config->h264_data.output_frames]);
+
+      ++config->h264_data.output_frames;
     }
     else {
       printf("[H264] [DEC] Unreachable\n");
